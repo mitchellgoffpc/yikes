@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yikes"
+version = "0.1.0"
+description = "A simple C compiler written in Python"
+authors = [
+    {name = "Mitchell Goff", email = "mitchellgoffpc@gmail.com"},
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+yikes = "yikes.main:main"
+
+[project.optional-dependencies]
+testing = [
+    "ruff",
+    "ty",
+    "pytest",
+    "pre-commit",
+]
+
+[tool.setuptools]
+packages = ["yikes"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["*"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py312"
+
+lint.select = ["ALL"]
+lint.ignore = [
+    "ARG", "ASYNC", "BLE", "C", "D", "EM", "ERA", "FBT", "PERF", "PLR", "Q", "RET", "RUF", "TC", "TD", "TRY",
+    "E701", "FIX002", "N802", "PT018", "S101",
+]
