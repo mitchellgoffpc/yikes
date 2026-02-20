@@ -71,6 +71,17 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              AST.TypeDef("T", _bt("int")),
              AST.VarDecl("x", AST.NamedType("T"), None),
          ])),
+        ("typedef int T; T (*p)[3];",
+         AST.Program([
+             AST.TypeDef("T", _bt("int")),
+             AST.VarDecl("p", AST.PointerType(AST.ArrayType(AST.NamedType("T"), AST.IntLiteral(3))), None),
+         ])),
+        ("typedef int T; T *x;",
+         AST.Program([
+             AST.TypeDef("T", _bt("int")),
+             AST.VarDecl("x", AST.PointerType(AST.NamedType("T")), None),
+         ])),
+        ("_Bool b;", AST.Program([AST.VarDecl("b", _bt("_Bool"), None)])),
         ("struct S s; union U u; enum E e;",
          AST.Program([
              AST.VarDecl("s", AST.StructType("S", None), None),
@@ -107,16 +118,7 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
                  [_init(None, nested=_decl("fp", pointer=_ptr())),
                   _init("a", suffixes=[_array_suffix(AST.IntLiteral(3))]),
                   _init("f", suffixes=[_func_suffix([
-                      _param(
-                          [_ts("int")],
-                          AST.AbstractDeclarator(
-                              None,
-                              AST.DirectAbstractDeclarator(
-                                  None,
-                                  [_array_suffix(AST.IntLiteral(3))],
-                              ),
-                          ),
-                      ),
+                      _param([_ts("int")], AST.AbstractDeclarator(None, AST.DirectAbstractDeclarator(None, [_array_suffix(AST.IntLiteral(3))]))),
                       _param([_ts("int")], AST.AbstractDeclarator(_ptr(), None)),
                   ])]),
                   _init("g", suffixes=[_func_suffix([_param([_ts("int")])], variadic=True)])],
@@ -128,6 +130,14 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
                  [AST.FunctionSpec("inline"), _ts("int")],
                  [_init("f", suffixes=[_func_suffix([])]),
                   _init("g", suffixes=[_func_suffix([_param([_ts("int")], _decl("y"))])])],
+             ),
+         ])),
+        ("int f(int a[static 3]), g;",
+         AST.Program([
+             AST.Declaration(
+                 [_ts("int")],
+                 [_init("f", suffixes=[_func_suffix([_param([_ts("int")], _decl("a", suffixes=[AST.DirectSuffix(None, AST.IntLiteral(3), True, False)]))])]),
+                  _init("g")],
              ),
          ])),
         ("const int *const p, *q;",

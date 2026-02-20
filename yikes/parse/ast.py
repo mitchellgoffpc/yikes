@@ -202,9 +202,6 @@ class StringLiteral(NamedTuple):
 class Identifier(NamedTuple):
     name: str
 
-class TypeName(NamedTuple):
-    ctype: CType
-
 class InitList(NamedTuple):
     items: list[InitializerItem]
 
