@@ -1,4 +1,8 @@
-# Instructions for Coding Agents
+# Project
+
+yikes is a simple C compiler written in Python.
+
+# Contributing
 
 ## Code Style
 
@@ -16,6 +20,8 @@ pytest
 ```
 
 All checks must pass before committing code.
+
+Note: Some agents run in a sandbox and may see permissions errors writing to `~/.cache/pre-commit`. If that happens, request escalation so pre-commit can write to that directory. Other agents may not need this.
 
 ## Commit Messages
 
