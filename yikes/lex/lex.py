@@ -173,5 +173,3 @@ def lex(source: str) -> list[Token]:
     tokens.append(Token(TokenKind.EOF, None, line, col))
     return tokens
 
-
-__all__ = ["Token", "lex"]
