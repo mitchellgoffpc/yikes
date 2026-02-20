@@ -97,7 +97,7 @@ def _normalize_expr(node: AST.Expr) -> AST.Expr:
         case AST.Member():
             return AST.Member(_normalize_expr(node.value), node.name, node.through_pointer)
         case AST.ArraySubscript():
-            return AST.ArraySubscript(_normalize_expr(node.value), _normalize_expr(node.index))
+            return AST.Unary("*", AST.Binary("+", _normalize_expr(node.value), _normalize_expr(node.index)))
         case AST.Conditional():
             return AST.Conditional(_normalize_expr(node.cond), _normalize_expr(node.then), _normalize_expr(node.otherwise))
         case AST.Cast():

@@ -13,11 +13,14 @@ def _bt(name: str) -> AST.BuiltinType:
 def _ts(name: str) -> AST.TypeSpec:
     return AST.TypeSpec(_bt(name))
 
-def _decl(name: str) -> AST.Declarator:
-    return AST.Declarator(None, AST.DirectDeclarator(name, None, []))
+def _decl(name: str, *, suffixes: list[AST.DirectSuffix] | None = None) -> AST.Declarator:
+    return AST.Declarator(None, AST.DirectDeclarator(name, None, suffixes or []))
 
-def _init(name: str, init: AST.Initializer | None = None) -> AST.InitDeclarator:
-    return AST.InitDeclarator(_decl(name), init)
+def _init(name: str, init: AST.Initializer | None = None, *, suffixes: list[AST.DirectSuffix] | None = None) -> AST.InitDeclarator:
+    return AST.InitDeclarator(_decl(name, suffixes=suffixes), init)
+
+def _array_suffix(size: AST.Expr | None) -> AST.DirectSuffix:
+    return AST.DirectSuffix(None, size, False, False)
 
 def _stmt(source: str) -> AST.Stmt:
     program = normalize(parse(f"int main() {{ {source} }}"))
@@ -114,6 +117,31 @@ def test_normalize_declaration_lists(subtests: pytest.Subtests) -> None:
          [
              AST.Declaration([_ts("int")], [_init("a", AST.IntLiteral(1))]),
              AST.Declaration([_ts("int")], [_init("b", AST.IntLiteral(2))]),
+         ]),
+    ]
+
+    for source, expected in cases:
+        with subtests.test(source=source):
+            assert _block_items(source) == expected
+
+
+def test_normalize_array_subscript(subtests: pytest.Subtests) -> None:
+    cases = [
+        ("a[2];", AST.ExprStmt(AST.Unary("*", AST.Binary("+", AST.Identifier("a"), AST.IntLiteral(2))))),
+        ("p[i + 1];",
+         AST.ExprStmt(AST.Unary("*", AST.Binary("+", AST.Identifier("p"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1)))))),
+    ]
+
+    for source, expected in cases:
+        with subtests.test(source=source):
+            assert _stmt(source) == expected
+
+
+def test_normalize_array_declaration(subtests: pytest.Subtests) -> None:
+    cases = [
+        ("int a[2];",
+         [
+             AST.VarDecl("a", AST.ArrayType(_bt("int"), AST.IntLiteral(2)), None),
          ]),
     ]
 
