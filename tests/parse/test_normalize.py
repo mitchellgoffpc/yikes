@@ -10,11 +10,26 @@ from yikes.parse.parse import parse
 def _bt(name: str) -> AST.BuiltinType:
     return AST.BuiltinType(name)
 
+def _ts(name: str) -> AST.TypeSpec:
+    return AST.TypeSpec(_bt(name))
+
+def _decl(name: str) -> AST.Declarator:
+    return AST.Declarator(None, AST.DirectDeclarator(name, None, []))
+
+def _init(name: str, init: AST.Initializer | None = None) -> AST.InitDeclarator:
+    return AST.InitDeclarator(_decl(name), init)
+
 def _stmt(source: str) -> AST.Stmt:
     program = normalize(parse(f"int main() {{ {source} }}"))
     item = program.items[0]
     assert isinstance(item, AST.FunctionDef)
     return item.body.items[0]
+
+def _block_items(source: str) -> list[AST.Stmt]:
+    program = normalize(parse(f"int main() {{ {source} }}"))
+    item = program.items[0]
+    assert isinstance(item, AST.FunctionDef)
+    return item.body.items
 
 
 def test_normalize_for_loops(subtests: pytest.Subtests) -> None:
@@ -35,6 +50,18 @@ def test_normalize_for_loops(subtests: pytest.Subtests) -> None:
         ("for (int i = 0; i < 3; i = i + 1) { x; }",
          AST.Block([
              AST.VarDecl("i", _bt("int"), AST.IntLiteral(0)),
+             AST.While(
+                 AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
+                 AST.Block([
+                     AST.ExprStmt(AST.Identifier("x")),
+                     AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1)))),
+                 ]),
+             ),
+         ])),
+        ("for (int i = 0, j = 1; i < 3; i = i + 1) x;",
+         AST.Block([
+             AST.Declaration([_ts("int")], [_init("i", AST.IntLiteral(0))]),
+             AST.Declaration([_ts("int")], [_init("j", AST.IntLiteral(1))]),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
                  AST.Block([
@@ -74,3 +101,22 @@ def test_normalize_do_while(subtests: pytest.Subtests) -> None:
     for source, expected in cases:
         with subtests.test(source=source):
             assert _stmt(source) == expected
+
+
+def test_normalize_declaration_lists(subtests: pytest.Subtests) -> None:
+    cases = [
+        ("int a, b;",
+         [
+             AST.Declaration([_ts("int")], [_init("a")]),
+             AST.Declaration([_ts("int")], [_init("b")]),
+         ]),
+        ("int a = 1, b = 2;",
+         [
+             AST.Declaration([_ts("int")], [_init("a", AST.IntLiteral(1))]),
+             AST.Declaration([_ts("int")], [_init("b", AST.IntLiteral(2))]),
+         ]),
+    ]
+
+    for source, expected in cases:
+        with subtests.test(source=source):
+            assert _block_items(source) == expected

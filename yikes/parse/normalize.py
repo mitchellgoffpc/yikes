@@ -1,40 +1,34 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import cast, get_args
 
 from yikes.parse import ast as AST  # noqa: N812
 
-_CTYPE_CLASSES = (
-    AST.BuiltinType,
-    AST.PointerType,
-    AST.ArrayType,
-    AST.FunctionType,
-    AST.StructType,
-    AST.UnionType,
-    AST.EnumType,
-    AST.NamedType,
-)
+_CTYPE_CLASSES = cast(tuple[type, ...], get_args(AST.CType.__value__))
 
 
 def normalize(program: AST.Program) -> AST.Program:
-    return AST.Program([_normalize_external_decl(item) for item in program.items])
+    items: list[AST.ExternalDecl] = []
+    for item in program.items:
+        items.extend(_normalize_external_decl(item))
+    return AST.Program(items)
 
-def _normalize_external_decl(node: AST.ExternalDecl) -> AST.ExternalDecl:
+def _normalize_external_decl(node: AST.ExternalDecl) -> list[AST.ExternalDecl]:
     match node:
         case AST.FunctionDef():
-            return AST.FunctionDef(node.name, node.params, node.return_type, _normalize_block(node.body))
+            return [AST.FunctionDef(node.name, node.params, node.return_type, _normalize_block(node.body))]
         case AST.VarDecl():
-            return AST.VarDecl(node.name, node.ctype, _normalize_initializer(node.init) if node.init else None)
+            return [AST.VarDecl(node.name, node.ctype, _normalize_initializer(node.init) if node.init else None)]
         case AST.TypeDef():
-            return node
+            return [node]
         case AST.StructDef():
-            return AST.StructDef(node.name, _normalize_fields(node.fields))
+            return [AST.StructDef(node.name, _normalize_fields(node.fields))]
         case AST.UnionDef():
-            return AST.UnionDef(node.name, _normalize_fields(node.fields))
+            return [AST.UnionDef(node.name, _normalize_fields(node.fields))]
         case AST.EnumDef():
-            return AST.EnumDef(node.name, [_normalize_enumerator(value) for value in node.values])
+            return [AST.EnumDef(node.name, [_normalize_enumerator(value) for value in node.values])]
         case AST.Declaration():
-            return AST.Declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators])
+            return cast(list[AST.ExternalDecl], _normalize_declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators]))
         case _:
             raise TypeError(f"Unknown external decl: {type(node).__name__}")
 
@@ -81,6 +75,13 @@ def _normalize_stmt(node: AST.Stmt) -> AST.Stmt:
         case _:
             raise TypeError(f"Unknown stmt: {type(node).__name__}")
 
+def _normalize_stmt_items(node: AST.Stmt) -> list[AST.Stmt]:
+    match node:
+        case AST.Declaration():
+            return cast(list[AST.Stmt], _normalize_declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators]))
+        case _:
+            return [_normalize_stmt(node)]
+
 def _normalize_expr(node: AST.Expr) -> AST.Expr:
     match node:
         case AST.Assign():
@@ -113,18 +114,21 @@ def _normalize_expr(node: AST.Expr) -> AST.Expr:
             raise TypeError(f"Unknown expr: {type(node).__name__}")
 
 def _normalize_block(block: AST.Block) -> AST.Block:
-    return AST.Block([_normalize_stmt(item) for item in block.items])
+    items: list[AST.Stmt] = []
+    for item in block.items:
+        items.extend(_normalize_stmt_items(item))
+    return AST.Block(items)
 
 def _normalize_for(node: AST.For) -> AST.Stmt:
-    init = _normalize_stmt(node.init) if node.init else None
+    init_items = _normalize_stmt_items(node.init) if node.init else []
     cond = _normalize_expr(node.cond) if node.cond else AST.BoolLiteral(True)
     step = _normalize_expr(node.step) if node.step else None
     body = _ensure_block(_normalize_stmt(node.body))
     if step:
         body = AST.Block(body.items + [AST.ExprStmt(step)])
     loop = AST.While(cond, body)
-    if init:
-        return AST.Block([init, loop])
+    if init_items:
+        return AST.Block(init_items + [loop])
     return loop
 
 def _normalize_do_while(node: AST.DoWhile) -> AST.Stmt:
@@ -163,3 +167,8 @@ def _ensure_block(stmt: AST.Stmt) -> AST.Block:
     if isinstance(stmt, AST.Block):
         return stmt
     return AST.Block([stmt])
+
+def _normalize_declaration(specs: list[AST.DeclSpec], declarators: list[AST.InitDeclarator]) -> list[AST.Declaration]:
+    if len(declarators) <= 1:
+        return [AST.Declaration(specs, declarators)]
+    return [AST.Declaration(specs, [declarator]) for declarator in declarators]
