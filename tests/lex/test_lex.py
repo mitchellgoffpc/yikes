@@ -1,5 +1,3 @@
-"""Tests for the lexer."""
-
 from __future__ import annotations
 
 import pytest

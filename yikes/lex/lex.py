@@ -1,10 +1,8 @@
-"""Simple lexer."""
-
 from __future__ import annotations
 
 from typing import NamedTuple
 
-from .tokens import KEYWORDS, PUNCTUATORS, TokenKind
+from yikes.lex.tokens import KEYWORDS, PUNCTUATORS, TokenKind
 
 
 class Token(NamedTuple):

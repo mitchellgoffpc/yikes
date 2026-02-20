@@ -1,5 +1,3 @@
-"""Tests for the main module."""
-
 from yikes.main import main
 
 

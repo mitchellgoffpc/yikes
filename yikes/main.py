@@ -1,6 +1,3 @@
-"""Main entry point for the yikes C compiler."""
-
-
 def main() -> None:
     """Main function for the yikes compiler."""
 
