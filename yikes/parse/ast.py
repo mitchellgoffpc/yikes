@@ -15,7 +15,7 @@ class FunctionDef(NamedTuple):
 class VarDecl(NamedTuple):
     name: str
     ctype: CType
-    init: Expr | None
+    init: Initializer | None
 
 class TypeDef(NamedTuple):
     name: str
@@ -267,7 +267,6 @@ type DeclSpec = StorageClassSpec | TypeQualifier | FunctionSpec | TypeSpec
 type CType = BuiltinType | PointerType | ArrayType | FunctionType | StructType | UnionType | EnumType | NamedType
 type ExternalDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration
 type Stmt = (
-    Block | VarDecl | Declaration | ExprStmt | Return | If | While | DoWhile | For | Break | Continue
-    | Switch | Case | Default | Label | Goto
+    Block | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration | ExprStmt | Return | If | While | DoWhile
+    | For | Break | Continue | Switch | Case | Default | Label | Goto
 )
-
