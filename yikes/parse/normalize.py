@@ -53,9 +53,11 @@ def _normalize_stmt(node: AST.Stmt) -> AST.Stmt:
         case AST.Return():
             return AST.Return(_normalize_expr(node.value) if node.value else None)
         case AST.If():
-            return AST.If(_normalize_expr(node.cond), _normalize_stmt(node.then), _normalize_stmt(node.otherwise) if node.otherwise else None)
+            then = _ensure_block(_normalize_stmt(node.then))
+            otherwise = _ensure_block(_normalize_stmt(node.otherwise)) if node.otherwise else None
+            return AST.If(_normalize_expr(node.cond), then, otherwise)
         case AST.While():
-            return AST.While(_normalize_expr(node.cond), _normalize_stmt(node.body))
+            return AST.While(_normalize_expr(node.cond), _ensure_block(_normalize_stmt(node.body)))
         case AST.DoWhile():
             return _normalize_do_while(node)
         case AST.For():

@@ -148,3 +148,18 @@ def test_normalize_array_declaration(subtests: pytest.Subtests) -> None:
     for source, expected in cases:
         with subtests.test(source=source):
             assert _block_items(source) == expected
+
+
+def test_normalize_block_bodies(subtests: pytest.Subtests) -> None:
+    cases = [
+        ("if (x) y;",
+         AST.If(AST.Identifier("x"), AST.Block([AST.ExprStmt(AST.Identifier("y"))]), None)),
+        ("if (x) y; else z;",
+         AST.If(AST.Identifier("x"), AST.Block([AST.ExprStmt(AST.Identifier("y"))]), AST.Block([AST.ExprStmt(AST.Identifier("z"))]))),
+        ("while (x) y;",
+         AST.While(AST.Identifier("x"), AST.Block([AST.ExprStmt(AST.Identifier("y"))]))),
+    ]
+
+    for source, expected in cases:
+        with subtests.test(source=source):
+            assert _stmt(source) == expected
