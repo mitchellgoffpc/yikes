@@ -93,8 +93,8 @@ def _bind_declaration(node: AST.Declaration, scope: AST.Scope) -> None:
 
 def _bind_decl_specs(specs: list[AST.DeclSpec], scope: AST.Scope, owner: AST.SymbolDecl) -> None:
     for spec in specs:
-        if isinstance(spec, AST.TypeSpec):
-            _bind_ctype_defs(spec.ctype, scope, owner)
+        if isinstance(spec, AST.CType):
+            _bind_ctype_defs(spec, scope, owner)
 
 def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
     for param in params:

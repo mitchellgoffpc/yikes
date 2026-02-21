@@ -4,7 +4,7 @@ from typing import cast, get_args
 
 from yikes.parse import ast as AST  # noqa: N812
 
-_CTYPE_CLASSES = cast(tuple[type, ...], get_args(AST.CType.__value__))
+_CTYPE_CLASSES = cast(tuple[type, ...], get_args(AST.CType))
 
 
 def normalize(program: AST.Program) -> AST.Program:

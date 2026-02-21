@@ -113,7 +113,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         if decl is not None or params:
             return False
         match specs:
-            case [AST.TypeSpec(ctype=AST.BuiltinType(keywords=[AST.TypeKeyword(name="void")]))]:
+            case [AST.BuiltinType(keywords=[AST.TypeKeyword(name="void")])]:
                 return True
         return False
 
@@ -323,21 +323,17 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 builtins.append(AST.TypeKeyword(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
                 advance()
             elif tok.kind == TokenKind.KW_STRUCT:
-                ctype = parse_struct_type()
-                specs.append(AST.TypeSpec(ctype, span=ctype.span))
+                specs.append(parse_struct_type())
                 seen_type_spec = True
             elif tok.kind == TokenKind.KW_UNION:
-                ctype = parse_union_type()
-                specs.append(AST.TypeSpec(ctype, span=ctype.span))
+                specs.append(parse_union_type())
                 seen_type_spec = True
             elif tok.kind == TokenKind.KW_ENUM:
-                ctype = parse_enum_type()
-                specs.append(AST.TypeSpec(ctype, span=ctype.span))
+                specs.append(parse_enum_type())
                 seen_type_spec = True
             elif tok.kind == TokenKind.IDENT and tok.value in typedef_names:
                 name = ident(advance())
-                ctype = AST.NamedType(name, span=name.span)
-                specs.append(AST.TypeSpec(ctype, span=ctype.span))
+                specs.append(AST.NamedType(name, span=name.span))
                 seen_type_spec = True
             else:
                 break
@@ -346,8 +342,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             if seen_type_spec:
                 error("Multiple type specifiers")
             builtins_span = merge_spans(builtins[0].span, builtins[-1].span)
-            ctype = AST.BuiltinType(builtins, span=builtins_span)
-            specs.append(AST.TypeSpec(ctype, span=ctype.span))
+            specs.append(AST.BuiltinType(builtins, span=builtins_span))
             seen_type_spec = True
 
         if not seen_type_spec:
@@ -801,8 +796,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
     def base_type(specs: list[AST.DeclSpec]) -> AST.CType:
         for spec in specs:
-            if isinstance(spec, AST.TypeSpec):
-                return spec.ctype
+            if isinstance(spec, AST.CType):
+                return spec
         error("Missing type specifier")
 
     def collect_mods(decl: AST.Declarator | AST.AbstractDeclarator) -> list[AST.Pointer | AST.DirectSuffix]:
@@ -856,11 +851,11 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
     def extract_tag_def(specs: list[AST.DeclSpec]) -> AST.StructDef | AST.UnionDef | AST.EnumDef | None:
         for spec in specs:
             match spec:
-                case AST.TypeSpec(ctype=AST.StructType(fields=[*fields], name=name, span=span)):
+                case AST.StructType(fields=[*fields], name=name, span=span):
                     return AST.StructDef(name, fields, span=span)
-                case AST.TypeSpec(ctype=AST.UnionType(fields=[*fields], name=name, span=span)):
+                case AST.UnionType(fields=[*fields], name=name, span=span):
                     return AST.UnionDef(name, fields, span=span)
-                case AST.TypeSpec(ctype=AST.EnumType(values=[*values], name=name, span=span)):
+                case AST.EnumType(values=[*values], name=name, span=span):
                     return AST.EnumDef(name, values, span=span)
         return None
 

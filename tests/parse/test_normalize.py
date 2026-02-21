@@ -16,9 +16,6 @@ def _id(name: str) -> AST.Identifier:
 def _block(items: list[AST.Stmt]) -> AST.Block:
     return AST.Block(items, scope=AST.Scope())
 
-def _ts(name: str) -> AST.TypeSpec:
-    return AST.TypeSpec(_bt(name))
-
 def _decl(name: str, *, suffixes: list[AST.DirectSuffix] | None = None) -> AST.Declarator:
     return AST.Declarator(None, AST.DirectDeclarator(_id(name), None, suffixes or []))
 
@@ -69,8 +66,8 @@ def test_normalize_for_loops(subtests: pytest.Subtests) -> None:
          ])),
         ("for (int i = 0, j = 1; i < 3; i = i + 1) x;",
          _block([
-             AST.Declaration([_ts("int")], [_init("i", AST.IntLiteral(0))]),
-             AST.Declaration([_ts("int")], [_init("j", AST.IntLiteral(1))]),
+             AST.Declaration([_bt("int")], [_init("i", AST.IntLiteral(0))]),
+             AST.Declaration([_bt("int")], [_init("j", AST.IntLiteral(1))]),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
                  _block([
@@ -116,13 +113,13 @@ def test_normalize_declaration_lists(subtests: pytest.Subtests) -> None:
     cases = [
         ("int a, b;",
          [
-             AST.Declaration([_ts("int")], [_init("a")]),
-             AST.Declaration([_ts("int")], [_init("b")]),
+             AST.Declaration([_bt("int")], [_init("a")]),
+             AST.Declaration([_bt("int")], [_init("b")]),
          ]),
         ("int a = 1, b = 2;",
          [
-             AST.Declaration([_ts("int")], [_init("a", AST.IntLiteral(1))]),
-             AST.Declaration([_ts("int")], [_init("b", AST.IntLiteral(2))]),
+             AST.Declaration([_bt("int")], [_init("a", AST.IntLiteral(1))]),
+             AST.Declaration([_bt("int")], [_init("b", AST.IntLiteral(2))]),
          ]),
     ]
 

@@ -313,10 +313,6 @@ class FunctionSpec(NamedTuple):
     name: str
     span: Span | None = None
 
-class TypeSpec(NamedTuple):
-    ctype: CType
-    span: Span | None = None
-
 class TypeKeyword(NamedTuple):
     name: str
     span: Span | None = None
@@ -359,16 +355,16 @@ class NamedType(NamedTuple):
     name: Identifier
     span: Span | None = None
 
-type Expr = (
+Expr = (
     Assign | Binary | Unary | IncDec | Call | Member | ArraySubscript | Conditional | Cast | Sizeof
     | IntLiteral | BoolLiteral | FloatLiteral | CharLiteral | StringLiteral | Identifier | CompoundLiteral
 )
-type Initializer = Expr | InitList | CompoundLiteral
-type DeclSpec = StorageClassSpec | TypeQualifier | FunctionSpec | TypeSpec
-type CType = BuiltinType | PointerType | ArrayType | FunctionType | StructType | UnionType | EnumType | NamedType
-type ExternalDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration
-type Stmt = (
+Initializer = Expr | InitList | CompoundLiteral
+CType = BuiltinType | PointerType | ArrayType | FunctionType | StructType | UnionType | EnumType | NamedType
+DeclSpec = StorageClassSpec | TypeQualifier | FunctionSpec | CType
+ExternalDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration
+Stmt = (
     Block | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration | ExprStmt | Return | If | While | DoWhile
     | For | Break | Continue | Switch | Case | Default | Label | Goto
 )
-type SymbolDecl = FunctionDef | VarDecl | TypeDef | Declaration | StructDef | UnionDef | EnumDef | Enumerator | Label | Param
+SymbolDecl = FunctionDef | VarDecl | TypeDef | Declaration | StructDef | UnionDef | EnumDef | Enumerator | Label | Param

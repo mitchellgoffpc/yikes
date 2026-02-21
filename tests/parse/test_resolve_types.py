@@ -18,12 +18,10 @@ def _id(name: str) -> AST.Identifier:
 def _bt(name: str) -> AST.BuiltinType:
     return AST.BuiltinType([AST.TypeKeyword(name)])
 
-
 def _ident(scope: AST.Scope, name: str) -> AST.Symbol:
     symbol = scope.idents.get(name)
     assert symbol is not None
     return symbol
-
 
 def _tag(scope: AST.Scope, name: str) -> AST.Symbol:
     symbol = scope.tags.get(name)
