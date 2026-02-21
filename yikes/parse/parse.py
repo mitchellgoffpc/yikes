@@ -3,49 +3,8 @@ from __future__ import annotations
 from typing import NoReturn
 
 from yikes.lex.lex import Token, lex
-from yikes.lex.tokens import TokenKind
+from yikes.lex.tokens import ASSIGN_OPS, BUILTIN_TYPES, FUNC_SPEC, KEYWORDS_BY_KIND, PUNCTUATORS_BY_KIND, STORAGE_CLASS, TYPE_QUAL, TokenKind
 from yikes.parse import ast as AST  # noqa: N812
-
-_STORAGE_CLASS = {
-    TokenKind.KW_AUTO: "auto",
-    TokenKind.KW_EXTERN: "extern",
-    TokenKind.KW_REGISTER: "register",
-    TokenKind.KW_STATIC: "static",
-    TokenKind.KW_TYPEDEF: "typedef",
-}
-_TYPE_QUAL = {
-    TokenKind.KW_CONST: "const",
-    TokenKind.KW_VOLATILE: "volatile",
-    TokenKind.KW_RESTRICT: "restrict",
-}
-_FUNC_SPEC = {TokenKind.KW_INLINE: "inline"}
-_BUILTIN_TYPES = {
-    TokenKind.KW_VOID: "void",
-    TokenKind.KW_CHAR: "char",
-    TokenKind.KW_SHORT: "short",
-    TokenKind.KW_INT: "int",
-    TokenKind.KW_LONG: "long",
-    TokenKind.KW_FLOAT: "float",
-    TokenKind.KW_DOUBLE: "double",
-    TokenKind.KW_SIGNED: "signed",
-    TokenKind.KW_UNSIGNED: "unsigned",
-    TokenKind.KW_BOOL: "_Bool",
-    TokenKind.KW_COMPLEX: "_Complex",
-    TokenKind.KW_IMAGINARY: "_Imaginary",
-}
-_ASSIGN_OPS: dict[TokenKind, str] = {
-    TokenKind.ASSIGN: "=",
-    TokenKind.PLUS_ASSIGN: "+=",
-    TokenKind.MINUS_ASSIGN: "-=",
-    TokenKind.STAR_ASSIGN: "*=",
-    TokenKind.SLASH_ASSIGN: "/=",
-    TokenKind.PERCENT_ASSIGN: "%=",
-    TokenKind.AMP_ASSIGN: "&=",
-    TokenKind.PIPE_ASSIGN: "|=",
-    TokenKind.CARET_ASSIGN: "^=",
-    TokenKind.LSHIFT_ASSIGN: "<<=",
-    TokenKind.RSHIFT_ASSIGN: ">>=",
-}
 
 
 def parse(source: str, *, with_spans: bool = True) -> AST.Program:
@@ -123,10 +82,10 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
     def is_decl_start(tok: Token) -> bool:
         return (
-            tok.kind in _STORAGE_CLASS
-            or tok.kind in _TYPE_QUAL
-            or tok.kind in _FUNC_SPEC
-            or tok.kind in _BUILTIN_TYPES
+            tok.kind in STORAGE_CLASS
+            or tok.kind in TYPE_QUAL
+            or tok.kind in FUNC_SPEC
+            or tok.kind in BUILTIN_TYPES
             or tok.kind in {TokenKind.KW_STRUCT, TokenKind.KW_UNION, TokenKind.KW_ENUM}
             or (tok.kind == TokenKind.IDENT and tok.value in typedef_names)
         )
@@ -169,8 +128,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         start_pos = pos
         specs = parse_decl_specs()
         if match(TokenKind.SEMI):
-            tag_def = extract_tag_def(specs)
-            return tag_def or AST.Declaration(specs, [], span=span_from(start_pos))
+            return extract_tag_def(specs) or AST.Declaration(specs, [], span=span_from(start_pos))
 
         decls = parse_init_declarator_list()
         if at(TokenKind.LBRACE):
@@ -180,9 +138,9 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             ctype = build_type(specs, decls[0].declarator)
             if not isinstance(ctype, AST.FunctionType):
                 error("Function definition requires function type")
-            assert isinstance(ctype, AST.FunctionType)
-            body = parse_block()
-            return AST.FunctionDef(name, ctype.params, ctype.return_type, ctype.variadic, body, scope=AST.Scope(), span=span_from(start_pos))
+            else:
+                body = parse_block()
+                return AST.FunctionDef(name, ctype.params, ctype.return_type, ctype.variadic, body, scope=AST.Scope(), span=span_from(start_pos))
 
         expect(TokenKind.SEMI)
         if has_storage(specs, "typedef"):
@@ -206,14 +164,12 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         while not at(TokenKind.RBRACE):
             if at(TokenKind.KW_CASE):
                 items.append(parse_case())
-                continue
-            if at(TokenKind.KW_DEFAULT):
+            elif at(TokenKind.KW_DEFAULT):
                 items.append(parse_default())
-                continue
-            if is_decl_start(peek()):
+            elif is_decl_start(peek()):
                 items.append(parse_declaration())
-                continue
-            items.append(parse_stmt())
+            else:
+                items.append(parse_stmt())
         expect(TokenKind.RBRACE)
         return AST.Block(items, scope=AST.Scope(), span=span_from(start_pos))
 
@@ -350,48 +306,41 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
         while True:
             tok = peek()
-            if tok.kind in _STORAGE_CLASS:
+            if tok.kind in STORAGE_CLASS:
                 if not allow_storage:
                     error("Storage class not allowed here")
-                specs.append(AST.StorageClassSpec(_STORAGE_CLASS[tok.kind], span=span(tok)))
+                specs.append(AST.StorageClassSpec(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
                 advance()
-                continue
-            if tok.kind in _TYPE_QUAL:
-                specs.append(AST.TypeQualifier(_TYPE_QUAL[tok.kind], span=span(tok)))
+            elif tok.kind in TYPE_QUAL:
+                specs.append(AST.TypeQualifier(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
                 advance()
-                continue
-            if tok.kind in _FUNC_SPEC:
+            elif tok.kind in FUNC_SPEC:
                 if not allow_function:
                     error("Function specifier not allowed here")
-                specs.append(AST.FunctionSpec(_FUNC_SPEC[tok.kind], span=span(tok)))
+                specs.append(AST.FunctionSpec(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
                 advance()
-                continue
-            if tok.kind in _BUILTIN_TYPES:
-                builtins.append(AST.TypeKeyword(_BUILTIN_TYPES[tok.kind], span=span(tok)))
+            elif tok.kind in BUILTIN_TYPES:
+                builtins.append(AST.TypeKeyword(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
                 advance()
-                continue
-            if tok.kind == TokenKind.KW_STRUCT:
+            elif tok.kind == TokenKind.KW_STRUCT:
                 ctype = parse_struct_type()
                 specs.append(AST.TypeSpec(ctype, span=ctype.span))
                 seen_type_spec = True
-                continue
-            if tok.kind == TokenKind.KW_UNION:
+            elif tok.kind == TokenKind.KW_UNION:
                 ctype = parse_union_type()
                 specs.append(AST.TypeSpec(ctype, span=ctype.span))
                 seen_type_spec = True
-                continue
-            if tok.kind == TokenKind.KW_ENUM:
+            elif tok.kind == TokenKind.KW_ENUM:
                 ctype = parse_enum_type()
                 specs.append(AST.TypeSpec(ctype, span=ctype.span))
                 seen_type_spec = True
-                continue
-            if tok.kind == TokenKind.IDENT and tok.value in typedef_names:
+            elif tok.kind == TokenKind.IDENT and tok.value in typedef_names:
                 name = ident(advance())
                 ctype = AST.NamedType(name, span=name.span)
                 specs.append(AST.TypeSpec(ctype, span=ctype.span))
                 seen_type_spec = True
-                continue
-            break
+            else:
+                break
 
         if builtins:
             if seen_type_spec:
@@ -485,15 +434,14 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 params, is_variadic = parse_param_list()
                 expect(TokenKind.RPAREN)
                 suffixes.append(AST.DirectSuffix(params, None, False, is_variadic, span=span_from(suffix_start_pos)))
-                continue
-            if match(TokenKind.LBRACKET):
+            elif match(TokenKind.LBRACKET):
                 suffix_start_pos = pos - 1
                 is_static = match(TokenKind.KW_STATIC)
                 size = None if at(TokenKind.RBRACKET) else parse_expr()
                 expect(TokenKind.RBRACKET)
                 suffixes.append(AST.DirectSuffix(None, size, is_static, False, span=span_from(suffix_start_pos)))
-                continue
-            break
+            else:
+                break
         return suffixes
 
     def parse_declarator() -> AST.Declarator:
@@ -539,8 +487,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             return None
         start_pos = pos - 1
         qualifiers: list[AST.TypeQualifier] = []
-        while peek().kind in _TYPE_QUAL:
-            qualifiers.append(AST.TypeQualifier(_TYPE_QUAL[peek().kind], span=span(peek())))
+        while peek().kind in TYPE_QUAL:
+            qualifiers.append(AST.TypeQualifier(KEYWORDS_BY_KIND[peek().kind], span=span(peek())))
             advance()
         return AST.Pointer(qualifiers, parse_pointer(), span=span_from(start_pos))
 
@@ -592,20 +540,16 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             if match(TokenKind.DOT):
                 start_pos = pos - 1
                 items.append(AST.Designator(expect_ident(), None, span=span_from(start_pos)))
-                continue
-            if match(TokenKind.LBRACKET):
+            elif match(TokenKind.LBRACKET):
                 start_pos = pos - 1
                 index = parse_expr()
                 expect(TokenKind.RBRACKET)
                 items.append(AST.Designator(None, index, span=span_from(start_pos)))
-                continue
-            break
+            else:
+                break
         return items
 
     def parse_expr() -> AST.Expr:
-        return parse_comma_expr()
-
-    def parse_comma_expr() -> AST.Expr:
         start_pos = pos
         expr = parse_assign_expr()
         while match(TokenKind.COMMA):
@@ -615,12 +559,12 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
     def parse_assign_expr() -> AST.Expr:
         start_pos = pos
         expr = parse_conditional_expr()
-        if peek().kind in _ASSIGN_OPS:
+        if peek().kind in ASSIGN_OPS:
             op = advance().kind
             value = parse_assign_expr()
             if op == TokenKind.ASSIGN:
                 return AST.Assign(expr, value, span=span_from(start_pos))
-            binary = AST.Binary(_ASSIGN_OPS[op][:-1], expr, value, span=merge_spans(expr.span, value.span))
+            binary = AST.Binary(PUNCTUATORS_BY_KIND[op][:-1], expr, value, span=merge_spans(expr.span, value.span))
             return AST.Assign(expr, binary, span=span_from(start_pos))
         return expr
 
@@ -788,51 +732,38 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                             break
                 expect(TokenKind.RPAREN)
                 expr = AST.Call(expr, args, span=span_from(start_pos))
-                continue
-            if match(TokenKind.LBRACKET):
+            elif match(TokenKind.LBRACKET):
                 index = parse_expr()
                 expect(TokenKind.RBRACKET)
                 expr = AST.ArraySubscript(expr, index, span=span_from(start_pos))
-                continue
-            if match(TokenKind.DOT):
+            elif match(TokenKind.DOT):
                 expr = AST.Member(expr, expect_ident(), False, span=span_from(start_pos))
-                continue
-            if match(TokenKind.ARROW):
+            elif match(TokenKind.ARROW):
                 expr = AST.Member(expr, expect_ident(), True, span=span_from(start_pos))
-                continue
-            if match(TokenKind.PLUS_PLUS):
+            elif match(TokenKind.PLUS_PLUS):
                 expr = AST.IncDec("++", expr, True, span=span_from(start_pos))
-                continue
-            if match(TokenKind.MINUS_MINUS):
+            elif match(TokenKind.MINUS_MINUS):
                 expr = AST.IncDec("--", expr, True, span=span_from(start_pos))
-                continue
-            break
+            else:
+                break
         return expr
 
     def parse_primary() -> AST.Expr:
         tok = peek()
-        if tok.kind == TokenKind.INT_LITERAL:
-            advance()
-            value = tok.value
-            assert isinstance(value, int)
-            return AST.IntLiteral(value, span=span(tok))
-        if tok.kind == TokenKind.FLOAT_LITERAL:
-            advance()
-            value = tok.value
-            assert isinstance(value, float)
-            return AST.FloatLiteral(value, span=span(tok))
-        if tok.kind == TokenKind.CHAR_LITERAL:
-            advance()
-            value = tok.value
-            assert isinstance(value, str)
-            return AST.CharLiteral(value, span=span(tok))
-        if tok.kind == TokenKind.STRING_LITERAL:
-            advance()
-            value = tok.value
-            assert isinstance(value, str)
-            return AST.StringLiteral(value, span=span(tok))
-        if tok.kind == TokenKind.IDENT:
-            return ident(advance())
+        if match(TokenKind.INT_LITERAL):
+            assert isinstance(tok.value, int)
+            return AST.IntLiteral(tok.value, span=span(tok))
+        if match(TokenKind.FLOAT_LITERAL):
+            assert isinstance(tok.value, float)
+            return AST.FloatLiteral(tok.value, span=span(tok))
+        if match(TokenKind.CHAR_LITERAL):
+            assert isinstance(tok.value, str)
+            return AST.CharLiteral(tok.value, span=span(tok))
+        if match(TokenKind.STRING_LITERAL):
+            assert isinstance(tok.value, str)
+            return AST.StringLiteral(tok.value, span=span(tok))
+        if match(TokenKind.IDENT):
+            return ident(tok)
         if match(TokenKind.LPAREN):
             expr = parse_expr()
             expect(TokenKind.RPAREN)
@@ -904,10 +835,11 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             for suf in d.suffixes:
                 mods.append(suf)
 
-        if isinstance(decl, AST.Declarator):
-            walk_decl(decl)
-        else:
-            walk_abstract(decl)
+        match decl:
+            case AST.Declarator():
+                walk_decl(decl)
+            case AST.AbstractDeclarator():
+                walk_abstract(decl)
         return mods
 
     def declarator_name(decl: AST.Declarator) -> AST.Identifier:
@@ -923,13 +855,13 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
     def extract_tag_def(specs: list[AST.DeclSpec]) -> AST.StructDef | AST.UnionDef | AST.EnumDef | None:
         for spec in specs:
-            if isinstance(spec, AST.TypeSpec):
-                if isinstance(spec.ctype, AST.StructType) and spec.ctype.fields is not None:
-                    return AST.StructDef(spec.ctype.name, spec.ctype.fields, span=spec.ctype.span)
-                if isinstance(spec.ctype, AST.UnionType) and spec.ctype.fields is not None:
-                    return AST.UnionDef(spec.ctype.name, spec.ctype.fields, span=spec.ctype.span)
-                if isinstance(spec.ctype, AST.EnumType) and spec.ctype.values is not None:
-                    return AST.EnumDef(spec.ctype.name, spec.ctype.values, span=spec.ctype.span)
+            match spec:
+                case AST.TypeSpec(ctype=AST.StructType(fields=[*fields], name=name, span=span)):
+                    return AST.StructDef(name, fields, span=span)
+                case AST.TypeSpec(ctype=AST.UnionType(fields=[*fields], name=name, span=span)):
+                    return AST.UnionDef(name, fields, span=span)
+                case AST.TypeSpec(ctype=AST.EnumType(values=[*values], name=name, span=span)):
+                    return AST.EnumDef(name, values, span=span)
         return None
 
     return parse_program()

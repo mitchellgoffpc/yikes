@@ -102,7 +102,7 @@ class TokenKind(StrEnum):
     RSHIFT_ASSIGN = "RSHIFT_ASSIGN"
 
 
-KEYWORDS: dict[str, TokenKind] = {
+KEYWORDS = {
     "auto": TokenKind.KW_AUTO,
     "break": TokenKind.KW_BREAK,
     "case": TokenKind.KW_CASE,
@@ -142,7 +142,7 @@ KEYWORDS: dict[str, TokenKind] = {
     "_Imaginary": TokenKind.KW_IMAGINARY,
 }
 
-PUNCTUATORS: dict[str, TokenKind] = {
+PUNCTUATORS = {
     "{": TokenKind.LBRACE,
     "}": TokenKind.RBRACE,
     "[": TokenKind.LBRACKET,
@@ -189,4 +189,48 @@ PUNCTUATORS: dict[str, TokenKind] = {
     "^=": TokenKind.CARET_ASSIGN,
     "<<=": TokenKind.LSHIFT_ASSIGN,
     ">>=": TokenKind.RSHIFT_ASSIGN,
+}
+
+KEYWORDS_BY_KIND = {kind: keyword for keyword, kind in KEYWORDS.items()}
+PUNCTUATORS_BY_KIND = {kind: punctuator for punctuator, kind in PUNCTUATORS.items()}
+
+STORAGE_CLASS = {
+    TokenKind.KW_AUTO,
+    TokenKind.KW_EXTERN,
+    TokenKind.KW_REGISTER,
+    TokenKind.KW_STATIC,
+    TokenKind.KW_TYPEDEF,
+}
+TYPE_QUAL = {
+    TokenKind.KW_CONST,
+    TokenKind.KW_VOLATILE,
+    TokenKind.KW_RESTRICT,
+}
+FUNC_SPEC = {TokenKind.KW_INLINE}
+BUILTIN_TYPES = {
+    TokenKind.KW_VOID,
+    TokenKind.KW_CHAR,
+    TokenKind.KW_SHORT,
+    TokenKind.KW_INT,
+    TokenKind.KW_LONG,
+    TokenKind.KW_FLOAT,
+    TokenKind.KW_DOUBLE,
+    TokenKind.KW_SIGNED,
+    TokenKind.KW_UNSIGNED,
+    TokenKind.KW_BOOL,
+    TokenKind.KW_COMPLEX,
+    TokenKind.KW_IMAGINARY,
+}
+ASSIGN_OPS = {
+    TokenKind.ASSIGN,
+    TokenKind.PLUS_ASSIGN,
+    TokenKind.MINUS_ASSIGN,
+    TokenKind.STAR_ASSIGN,
+    TokenKind.SLASH_ASSIGN,
+    TokenKind.PERCENT_ASSIGN,
+    TokenKind.AMP_ASSIGN,
+    TokenKind.PIPE_ASSIGN,
+    TokenKind.CARET_ASSIGN,
+    TokenKind.LSHIFT_ASSIGN,
+    TokenKind.RSHIFT_ASSIGN,
 }
