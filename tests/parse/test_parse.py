@@ -7,7 +7,7 @@ from yikes.parse.parse import parse
 
 
 def _bt(name: str) -> AST.BuiltinType:
-    return AST.BuiltinType(name)
+    return AST.BuiltinType([AST.TypeKeyword(name)])
 
 def _id(name: str) -> AST.Identifier:
     return AST.Identifier(name)

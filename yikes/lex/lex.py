@@ -10,6 +10,7 @@ class Token(NamedTuple):
     value: str | int | float | None
     line: int
     col: int
+    length: int
 
 
 _PUNCTUATOR_LIST: list[str] = list(PUNCTUATORS.keys())
@@ -80,7 +81,7 @@ def lex(source: str) -> list[Token]:
         text = source[start_i:i]
         kind = KEYWORDS.get(text, TokenKind.IDENT)
         value = text if kind == TokenKind.IDENT else None
-        return Token(kind, value, line, start_col)
+        return Token(kind, value, line, start_col, len(text))
 
     def read_number() -> Token:
         start_col = col
@@ -114,11 +115,12 @@ def lex(source: str) -> list[Token]:
 
         text = source[start_i:i]
         if saw_dot or saw_exp:
-            return Token(TokenKind.FLOAT_LITERAL, float(text), line, start_col)
-        return Token(TokenKind.INT_LITERAL, int(text), line, start_col)
+            return Token(TokenKind.FLOAT_LITERAL, float(text), line, start_col, len(text))
+        return Token(TokenKind.INT_LITERAL, int(text), line, start_col, len(text))
 
     def read_string(quote: str) -> Token:
         start_col = col
+        start_i = i
         advance()
         chars: list[str] = []
         while i < n:
@@ -144,7 +146,7 @@ def lex(source: str) -> list[Token]:
 
         value = "".join(chars)
         kind = TokenKind.CHAR_LITERAL if quote == "'" else TokenKind.STRING_LITERAL
-        return Token(kind, value, line, start_col)
+        return Token(kind, value, line, start_col, i - start_i)
 
     while i < n:
         skip_whitespace()
@@ -164,12 +166,11 @@ def lex(source: str) -> list[Token]:
 
         for punct in _PUNCTUATOR_LIST:
             if match(punct):
-                tokens.append(Token(PUNCTUATORS[punct], None, line, col))
+                tokens.append(Token(PUNCTUATORS[punct], None, line, col, len(punct)))
                 advance(len(punct))
                 break
         else:
             error(f"Unexpected character {ch!r}")
 
-    tokens.append(Token(TokenKind.EOF, None, line, col))
+    tokens.append(Token(TokenKind.EOF, None, line, col, 0))
     return tokens
-
