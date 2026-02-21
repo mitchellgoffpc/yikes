@@ -16,10 +16,10 @@ def _bind_external_decl(node: AST.ExternalDecl, scope: AST.Scope) -> None:
             _bind_block(node.body, node.body.scope, node.scope, use_existing=True)
         case AST.VarDecl():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.VAR, node.ctype, node)
+            _add_ident(scope, node.name, AST.SymbolKind.VAR, None, node)
         case AST.TypeDef():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.TYPEDEF, node.ctype, node)
+            _add_ident(scope, node.name, AST.SymbolKind.TYPEDEF, None, node)
         case AST.StructDef():
             _bind_tag_def(scope, AST.StructType(node.name, node.fields), node)
         case AST.UnionDef():
@@ -38,10 +38,10 @@ def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None
             _bind_block(node, scope, label_scope)
         case AST.VarDecl():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.VAR, node.ctype, node)
+            _add_ident(scope, node.name, AST.SymbolKind.VAR, None, node)
         case AST.TypeDef():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.TYPEDEF, node.ctype, node)
+            _add_ident(scope, node.name, AST.SymbolKind.TYPEDEF, None, node)
         case AST.StructDef():
             _bind_tag_def(scope, AST.StructType(node.name, node.fields), node)
         case AST.UnionDef():
@@ -99,7 +99,7 @@ def _bind_decl_specs(specs: list[AST.DeclSpec], scope: AST.Scope, owner: AST.Sym
 def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
     for param in params:
         if param.name:
-            _add_ident(scope, param.name, AST.SymbolKind.VAR, param.ctype, param)
+            _add_ident(scope, param.name, AST.SymbolKind.VAR, None, param)
         _bind_ctype_defs(param.ctype, scope, None)
 
 def _bind_ctype_defs(ctype: AST.CType, scope: AST.Scope, owner: AST.SymbolDecl | None) -> None:

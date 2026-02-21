@@ -175,7 +175,7 @@ def parse(source: str) -> AST.Program:
                 error("Function definition requires function type")
             assert isinstance(ctype, AST.FunctionType)
             body = parse_block()
-            return AST.FunctionDef(name, ctype.params, ctype.return_type, body, scope=AST.Scope())
+            return AST.FunctionDef(name, ctype.params, ctype.return_type, ctype.variadic, body, scope=AST.Scope())
 
         expect(TokenKind.SEMI)
         if has_storage(specs, "typedef"):

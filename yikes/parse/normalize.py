@@ -16,7 +16,7 @@ def normalize(program: AST.Program) -> AST.Program:
 def _normalize_external_decl(node: AST.ExternalDecl) -> list[AST.ExternalDecl]:
     match node:
         case AST.FunctionDef():
-            return [AST.FunctionDef(node.name, node.params, node.return_type, _normalize_block(node.body), scope=AST.Scope())]
+            return [AST.FunctionDef(node.name, node.params, node.return_type, node.variadic, _normalize_block(node.body), scope=AST.Scope())]
         case AST.VarDecl():
             return [AST.VarDecl(node.name, node.ctype, _normalize_initializer(node.init) if node.init else None)]
         case AST.TypeDef():

@@ -13,7 +13,8 @@ class SymbolKind(StrEnum):
     TAG = "tag"
     LABEL = "label"
 
-class Symbol(NamedTuple):
+@dataclass
+class Symbol:
     name: str
     kind: SymbolKind
     ctype: CType | None
@@ -34,6 +35,7 @@ class FunctionDef(NamedTuple):
     name: str
     params: list[Param]
     return_type: CType
+    variadic: bool
     body: Block
     scope: Scope
 
