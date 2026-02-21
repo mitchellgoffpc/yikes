@@ -12,6 +12,12 @@ def _bt(name: str) -> AST.BuiltinType:
 def _id(name: str) -> AST.Identifier:
     return AST.Identifier(name)
 
+def _pos(line: int, col: int) -> AST.Position:
+    return AST.Position(line, col)
+
+def _span(start_line: int, start_col: int, end_line: int, end_col: int) -> AST.Span:
+    return AST.Span(_pos(start_line, start_col), _pos(end_line, end_col))
+
 def _program(items: list[AST.ExternalDecl]) -> AST.Program:
     return AST.Program(items, AST.Scope())
 
@@ -325,3 +331,43 @@ def test_initializers(subtests: pytest.Subtests) -> None:
     for source, expected in cases:
         with subtests.test(source=source):
             assert parse(source, with_spans=False) == expected
+
+
+def test_spans(subtests: pytest.Subtests) -> None:
+    source = "int main() {\n  return 42;\n}\n"
+    expected = AST.Program([
+        AST.FunctionDef(
+            AST.Identifier("main", _span(1, 5, 1, 9)),
+            [],
+            AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)),
+            False,
+            AST.Block([AST.Return(AST.IntLiteral(42, _span(2, 10, 2, 12)), _span(2, 3, 2, 13))], scope=AST.Scope(), span=_span(1, 12, 3, 2)),
+            scope=AST.Scope(),
+            span=_span(1, 1, 3, 2),
+        ),
+    ], AST.Scope(), span=_span(1, 1, 3, 2))
+    with subtests.test(source=source):
+        assert parse(source) == expected
+
+    source = "int x = { [1] = 2, .a = 3 };"
+    expected = AST.Program([
+        AST.VarDecl(
+            AST.Identifier("x", _span(1, 5, 1, 6)),
+            AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)),
+            AST.InitList([
+                AST.InitializerItem(
+                    [AST.Designator(None, AST.IntLiteral(1, _span(1, 12, 1, 13)), _span(1, 11, 1, 14))],
+                    AST.IntLiteral(2, _span(1, 17, 1, 18)),
+                    _span(1, 11, 1, 18),
+                ),
+                AST.InitializerItem(
+                    [AST.Designator(AST.Identifier("a", _span(1, 21, 1, 22)), None, _span(1, 20, 1, 22))],
+                    AST.IntLiteral(3, _span(1, 25, 1, 26)),
+                    _span(1, 20, 1, 26),
+                ),
+            ], _span(1, 9, 1, 28)),
+            _span(1, 1, 1, 29),
+        ),
+    ], AST.Scope(), span=_span(1, 1, 1, 29))
+    with subtests.test(source=source):
+        assert parse(source) == expected
