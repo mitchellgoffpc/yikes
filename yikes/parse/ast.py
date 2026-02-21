@@ -1,16 +1,41 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import NamedTuple
+
+
+class SymbolKind(StrEnum):
+    VAR = "var"
+    FUNC = "func"
+    TYPEDEF = "typedef"
+    ENUM_CONST = "enum_const"
+    TAG = "tag"
+    LABEL = "label"
+
+class Symbol(NamedTuple):
+    name: str
+    kind: SymbolKind
+    ctype: CType | None
+    decl: SymbolDecl | None
+
+@dataclass
+class Scope:
+    idents: dict[str, Symbol] = field(default_factory=dict)
+    tags: dict[str, Symbol] = field(default_factory=dict)
+    labels: dict[str, Symbol] = field(default_factory=dict)
 
 
 class Program(NamedTuple):
     items: list[ExternalDecl]
+    scope: Scope
 
 class FunctionDef(NamedTuple):
     name: str
     params: list[Param]
     return_type: CType
     body: Block
+    scope: Scope
 
 class VarDecl(NamedTuple):
     name: str
@@ -31,6 +56,7 @@ class Param(NamedTuple):
 
 class Block(NamedTuple):
     items: list[Stmt]
+    scope: Scope
 
 class Field(NamedTuple):
     name: str | None
@@ -112,6 +138,7 @@ class For(NamedTuple):
     cond: Expr | None
     step: Expr | None
     body: Stmt
+    scope: Scope
 
 class Break(NamedTuple):
     pass
@@ -267,3 +294,4 @@ type Stmt = (
     Block | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration | ExprStmt | Return | If | While | DoWhile
     | For | Break | Continue | Switch | Case | Default | Label | Goto
 )
+type SymbolDecl = FunctionDef | VarDecl | TypeDef | Declaration | StructDef | UnionDef | EnumDef | Enumerator | Label | Param

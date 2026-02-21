@@ -157,7 +157,7 @@ def parse(source: str) -> AST.Program:
         items: list[AST.ExternalDecl] = []
         while not at(TokenKind.EOF):
             items.append(parse_external_decl())
-        return AST.Program(items)
+        return AST.Program(items, scope=AST.Scope())
 
     def parse_external_decl() -> AST.ExternalDecl:
         specs = parse_decl_specs()
@@ -175,7 +175,7 @@ def parse(source: str) -> AST.Program:
                 error("Function definition requires function type")
             assert isinstance(ctype, AST.FunctionType)
             body = parse_block()
-            return AST.FunctionDef(name, ctype.params, ctype.return_type, body)
+            return AST.FunctionDef(name, ctype.params, ctype.return_type, body, scope=AST.Scope())
 
         expect(TokenKind.SEMI)
         if has_storage(specs, "typedef"):
@@ -207,7 +207,7 @@ def parse(source: str) -> AST.Program:
                 continue
             items.append(parse_stmt())
         expect(TokenKind.RBRACE)
-        return AST.Block(items)
+        return AST.Block(items, scope=AST.Scope())
 
     def parse_stmt() -> AST.Stmt:
         if at(TokenKind.LBRACE):
@@ -267,13 +267,13 @@ def parse(source: str) -> AST.Program:
         expect(TokenKind.KW_CASE)
         value = parse_expr()
         expect(TokenKind.COLON)
-        body = AST.Block(parse_stmt_list({TokenKind.KW_CASE, TokenKind.KW_DEFAULT, TokenKind.RBRACE}))
+        body = AST.Block(parse_stmt_list({TokenKind.KW_CASE, TokenKind.KW_DEFAULT, TokenKind.RBRACE}), scope=AST.Scope())
         return AST.Case(value, body)
 
     def parse_default() -> AST.Default:
         expect(TokenKind.KW_DEFAULT)
         expect(TokenKind.COLON)
-        body = AST.Block(parse_stmt_list({TokenKind.KW_CASE, TokenKind.KW_DEFAULT, TokenKind.RBRACE}))
+        body = AST.Block(parse_stmt_list({TokenKind.KW_CASE, TokenKind.KW_DEFAULT, TokenKind.RBRACE}), scope=AST.Scope())
         return AST.Default(body)
 
     def parse_stmt_list(stop: set[TokenKind]) -> list[AST.Stmt]:
@@ -303,7 +303,7 @@ def parse(source: str) -> AST.Program:
 
         step = None if at(TokenKind.RPAREN) else parse_expr()
         expect(TokenKind.RPAREN)
-        return AST.For(init, cond, step, parse_stmt())
+        return AST.For(init, cond, step, parse_stmt(), scope=AST.Scope())
 
     def parse_declaration() -> AST.Stmt:
         specs = parse_decl_specs()

@@ -10,6 +10,9 @@ from yikes.parse.parse import parse
 def _bt(name: str) -> AST.BuiltinType:
     return AST.BuiltinType(name)
 
+def _block(items: list[AST.Stmt]) -> AST.Block:
+    return AST.Block(items, scope=AST.Scope())
+
 def _ts(name: str) -> AST.TypeSpec:
     return AST.TypeSpec(_bt(name))
 
@@ -38,36 +41,36 @@ def _block_items(source: str) -> list[AST.Stmt]:
 def test_normalize_for_loops(subtests: pytest.Subtests) -> None:
     cases = [
         ("for (;;) x;",
-         AST.While(AST.BoolLiteral(True), AST.Block([AST.ExprStmt(AST.Identifier("x"))]))),
+         AST.While(AST.BoolLiteral(True), _block([AST.ExprStmt(AST.Identifier("x"))]))),
         ("for (i = 0; i < 3; i = i + 1) x;",
-         AST.Block([
+         _block([
              AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.IntLiteral(0))),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
-                 AST.Block([
+                 _block([
                      AST.ExprStmt(AST.Identifier("x")),
                      AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1)))),
                  ]),
              ),
          ])),
         ("for (int i = 0; i < 3; i = i + 1) { x; }",
-         AST.Block([
+         _block([
              AST.VarDecl("i", _bt("int"), AST.IntLiteral(0)),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
-                 AST.Block([
+                 _block([
                      AST.ExprStmt(AST.Identifier("x")),
                      AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1)))),
                  ]),
              ),
          ])),
         ("for (int i = 0, j = 1; i < 3; i = i + 1) x;",
-         AST.Block([
+         _block([
              AST.Declaration([_ts("int")], [_init("i", AST.IntLiteral(0))]),
              AST.Declaration([_ts("int")], [_init("j", AST.IntLiteral(1))]),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
-                 AST.Block([
+                 _block([
                      AST.ExprStmt(AST.Identifier("x")),
                      AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1)))),
                  ]),
@@ -85,7 +88,7 @@ def test_normalize_do_while(subtests: pytest.Subtests) -> None:
         ("do x; while (y);",
          AST.While(
              AST.BoolLiteral(True),
-             AST.Block([
+             _block([
                  AST.ExprStmt(AST.Identifier("x")),
                  AST.If(AST.Unary("!", AST.Identifier("y")), AST.Break(), None),
              ]),
@@ -93,7 +96,7 @@ def test_normalize_do_while(subtests: pytest.Subtests) -> None:
         ("do { x; y; } while (cond);",
          AST.While(
              AST.BoolLiteral(True),
-             AST.Block([
+             _block([
                  AST.ExprStmt(AST.Identifier("x")),
                  AST.ExprStmt(AST.Identifier("y")),
                  AST.If(AST.Unary("!", AST.Identifier("cond")), AST.Break(), None),
@@ -153,11 +156,11 @@ def test_normalize_array_declaration(subtests: pytest.Subtests) -> None:
 def test_normalize_block_bodies(subtests: pytest.Subtests) -> None:
     cases = [
         ("if (x) y;",
-         AST.If(AST.Identifier("x"), AST.Block([AST.ExprStmt(AST.Identifier("y"))]), None)),
+         AST.If(AST.Identifier("x"), _block([AST.ExprStmt(AST.Identifier("y"))]), None)),
         ("if (x) y; else z;",
-         AST.If(AST.Identifier("x"), AST.Block([AST.ExprStmt(AST.Identifier("y"))]), AST.Block([AST.ExprStmt(AST.Identifier("z"))]))),
+         AST.If(AST.Identifier("x"), _block([AST.ExprStmt(AST.Identifier("y"))]), _block([AST.ExprStmt(AST.Identifier("z"))]))),
         ("while (x) y;",
-         AST.While(AST.Identifier("x"), AST.Block([AST.ExprStmt(AST.Identifier("y"))]))),
+         AST.While(AST.Identifier("x"), _block([AST.ExprStmt(AST.Identifier("y"))]))),
     ]
 
     for source, expected in cases:

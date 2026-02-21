@@ -11,12 +11,12 @@ def normalize(program: AST.Program) -> AST.Program:
     items: list[AST.ExternalDecl] = []
     for item in program.items:
         items.extend(_normalize_external_decl(item))
-    return AST.Program(items)
+    return AST.Program(items, scope=AST.Scope())
 
 def _normalize_external_decl(node: AST.ExternalDecl) -> list[AST.ExternalDecl]:
     match node:
         case AST.FunctionDef():
-            return [AST.FunctionDef(node.name, node.params, node.return_type, _normalize_block(node.body))]
+            return [AST.FunctionDef(node.name, node.params, node.return_type, _normalize_block(node.body), scope=AST.Scope())]
         case AST.VarDecl():
             return [AST.VarDecl(node.name, node.ctype, _normalize_initializer(node.init) if node.init else None)]
         case AST.TypeDef():
@@ -119,7 +119,7 @@ def _normalize_block(block: AST.Block) -> AST.Block:
     items: list[AST.Stmt] = []
     for item in block.items:
         items.extend(_normalize_stmt_items(item))
-    return AST.Block(items)
+    return AST.Block(items, scope=AST.Scope())
 
 def _normalize_for(node: AST.For) -> AST.Stmt:
     init_items = _normalize_stmt_items(node.init) if node.init else []
@@ -127,17 +127,17 @@ def _normalize_for(node: AST.For) -> AST.Stmt:
     step = _normalize_expr(node.step) if node.step else None
     body = _ensure_block(_normalize_stmt(node.body))
     if step:
-        body = AST.Block(body.items + [AST.ExprStmt(step)])
+        body = AST.Block(body.items + [AST.ExprStmt(step)], scope=AST.Scope())
     loop = AST.While(cond, body)
     if init_items:
-        return AST.Block(init_items + [loop])
+        return AST.Block(init_items + [loop], scope=AST.Scope())
     return loop
 
 def _normalize_do_while(node: AST.DoWhile) -> AST.Stmt:
     body = _ensure_block(_normalize_stmt(node.body))
     cond = _normalize_expr(node.cond)
     tail = AST.If(AST.Unary("!", cond), AST.Break(), None)
-    return AST.While(AST.BoolLiteral(True), AST.Block(body.items + [tail]))
+    return AST.While(AST.BoolLiteral(True), AST.Block(body.items + [tail], scope=AST.Scope()))
 
 def _normalize_fields(fields: list[AST.Field] | None) -> list[AST.Field] | None:
     if fields is None:
@@ -168,7 +168,7 @@ def _normalize_designator(desig: AST.Designator) -> AST.Designator:
 def _ensure_block(stmt: AST.Stmt) -> AST.Block:
     if isinstance(stmt, AST.Block):
         return stmt
-    return AST.Block([stmt])
+    return AST.Block([stmt], scope=AST.Scope())
 
 def _normalize_declaration(specs: list[AST.DeclSpec], declarators: list[AST.InitDeclarator]) -> list[AST.Declaration]:
     if len(declarators) <= 1:

@@ -9,6 +9,15 @@ from yikes.parse.parse import parse
 def _bt(name: str) -> AST.BuiltinType:
     return AST.BuiltinType(name)
 
+def _program(items: list[AST.ExternalDecl]) -> AST.Program:
+    return AST.Program(items, AST.Scope())
+
+def _block(items: list[AST.Stmt]) -> AST.Block:
+    return AST.Block(items, scope=AST.Scope())
+
+def _for(init: AST.Stmt | None, cond: AST.Expr | None, step: AST.Expr | None, body: AST.Stmt) -> AST.For:
+    return AST.For(init, cond, step, body, scope=AST.Scope())
+
 def _ts(name: str) -> AST.TypeSpec:
     return AST.TypeSpec(_bt(name))
 
@@ -51,7 +60,7 @@ def _expr(source: str) -> AST.Expr:
 def test_program_decls(subtests: pytest.Subtests) -> None:
     cases = [
         ("struct S { int :1; int a:2; int b; };",
-         AST.Program([
+         _program([
              AST.StructDef("S", [
                  AST.Field(None, _bt("int"), AST.IntLiteral(1)),
                  AST.Field("a", _bt("int"), AST.IntLiteral(2)),
@@ -59,47 +68,48 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              ]),
          ])),
         ("union U { int x; char y; };",
-         AST.Program([
+         _program([
              AST.UnionDef("U", [AST.Field("x", _bt("int"), None), AST.Field("y", _bt("char"), None)]),
          ])),
         ("enum E { A, B = 3 };",
-         AST.Program([
+         _program([
              AST.EnumDef("E", [AST.Enumerator("A", None), AST.Enumerator("B", AST.IntLiteral(3))]),
          ])),
         ("typedef int T; T x;",
-         AST.Program([
+         _program([
              AST.TypeDef("T", _bt("int")),
              AST.VarDecl("x", AST.NamedType("T"), None),
          ])),
         ("typedef int T; T (*p)[3];",
-         AST.Program([
+         _program([
              AST.TypeDef("T", _bt("int")),
              AST.VarDecl("p", AST.PointerType(AST.ArrayType(AST.NamedType("T"), AST.IntLiteral(3))), None),
          ])),
         ("typedef int T; T *x;",
-         AST.Program([
+         _program([
              AST.TypeDef("T", _bt("int")),
              AST.VarDecl("x", AST.PointerType(AST.NamedType("T")), None),
          ])),
-        ("_Bool b;", AST.Program([AST.VarDecl("b", _bt("_Bool"), None)])),
+        ("_Bool b;", _program([AST.VarDecl("b", _bt("_Bool"), None)])),
         ("struct S s; union U u; enum E e;",
-         AST.Program([
+         _program([
              AST.VarDecl("s", AST.StructType("S", None), None),
              AST.VarDecl("u", AST.UnionType("U", None), None),
              AST.VarDecl("e", AST.EnumType("E", None), None),
          ])),
         ("int *p; int f(int);",
-         AST.Program([
+         _program([
              AST.VarDecl("p", AST.PointerType(_bt("int")), None),
              AST.VarDecl("f", AST.FunctionType(_bt("int"), [AST.Param("", _bt("int"))], False), None),
          ])),
         ("int add(int x, int y) { return x + y; }",
-         AST.Program([
+         _program([
              AST.FunctionDef(
                  "add",
                  [AST.Param("x", _bt("int")), AST.Param("y", _bt("int"))],
                  _bt("int"),
-                 AST.Block([AST.Return(AST.Binary("+", AST.Identifier("x"), AST.Identifier("y")))]),
+                 _block([AST.Return(AST.Binary("+", AST.Identifier("x"), AST.Identifier("y")))]),
+                 scope=AST.Scope(),
              ),
          ])),
     ]
@@ -112,7 +122,7 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
 def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
     cases = [
         ("static const int (*fp), a[3], f(int [3], int *), g(int, ...);",
-         AST.Program([
+         _program([
              AST.Declaration(
                  [AST.StorageClassSpec("static"), AST.TypeQualifier("const"), _ts("int")],
                  [_init(None, nested=_decl("fp", pointer=_ptr())),
@@ -125,7 +135,7 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
              ),
          ])),
         ("inline int f(void), g(int y);",
-         AST.Program([
+         _program([
              AST.Declaration(
                  [AST.FunctionSpec("inline"), _ts("int")],
                  [_init("f", suffixes=[_func_suffix([])]),
@@ -133,7 +143,7 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
              ),
          ])),
         ("int f(int a[static 3]), g;",
-         AST.Program([
+         _program([
              AST.Declaration(
                  [_ts("int")],
                  [_init("f", suffixes=[_func_suffix([_param([_ts("int")], _decl("a", suffixes=[AST.DirectSuffix(None, AST.IntLiteral(3), True, False)]))])]),
@@ -141,7 +151,7 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
              ),
          ])),
         ("const int *const p, *q;",
-         AST.Program([
+         _program([
              AST.Declaration(
                  [AST.TypeQualifier("const"), _ts("int")],
                  [_init("p", pointer=_ptr([AST.TypeQualifier("const")])),
@@ -163,16 +173,16 @@ def test_statements(subtests: pytest.Subtests) -> None:
          AST.If(AST.Identifier("x"), AST.ExprStmt(AST.Identifier("y")), AST.ExprStmt(AST.Identifier("z")))),
         ("while (x) y;", AST.While(AST.Identifier("x"), AST.ExprStmt(AST.Identifier("y")))),
         ("do x; while (y);", AST.DoWhile(AST.ExprStmt(AST.Identifier("x")), AST.Identifier("y"))),
-        ("for (;;) x;", AST.For(None, None, None, AST.ExprStmt(AST.Identifier("x")))),
+        ("for (;;) x;", _for(None, None, None, AST.ExprStmt(AST.Identifier("x")))),
         ("for (i = 0; i < 3; i++) x;",
-         AST.For(
+         _for(
              AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.IntLiteral(0))),
              AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
              AST.IncDec("++", AST.Identifier("i"), True),
              AST.ExprStmt(AST.Identifier("x")),
          )),
         ("for (int i = 0; i < 3; i = i + 1) x;",
-         AST.For(
+         _for(
              AST.VarDecl("i", _bt("int"), AST.IntLiteral(0)),
              AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
              AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1))),
@@ -183,9 +193,9 @@ def test_statements(subtests: pytest.Subtests) -> None:
         ("switch (x) { case 1: y; default: z; }",
          AST.Switch(
              AST.Identifier("x"),
-             AST.Block([
-                 AST.Case(AST.IntLiteral(1), AST.Block([AST.ExprStmt(AST.Identifier("y"))])),
-                 AST.Default(AST.Block([AST.ExprStmt(AST.Identifier("z"))])),
+             _block([
+                 AST.Case(AST.IntLiteral(1), _block([AST.ExprStmt(AST.Identifier("y"))])),
+                 AST.Default(_block([AST.ExprStmt(AST.Identifier("z"))])),
              ]),
          )),
         ("label: goto label;", AST.Label("label", AST.Goto("label"))),
@@ -244,7 +254,7 @@ def test_expressions(subtests: pytest.Subtests) -> None:
 def test_initializers(subtests: pytest.Subtests) -> None:
     cases = [
         ("int a[3] = {1, 2, 3};",
-         AST.Program([
+         _program([
              AST.VarDecl(
                  "a",
                  AST.ArrayType(_bt("int"), AST.IntLiteral(3)),
@@ -256,7 +266,7 @@ def test_initializers(subtests: pytest.Subtests) -> None:
              ),
          ])),
         ("int a[3] = { [1] = 2, [2] = 3 };",
-         AST.Program([
+         _program([
              AST.VarDecl(
                  "a",
                  AST.ArrayType(_bt("int"), AST.IntLiteral(3)),
@@ -267,7 +277,7 @@ def test_initializers(subtests: pytest.Subtests) -> None:
              ),
          ])),
         ("int x = { .a = 1, .b = 2 };",
-         AST.Program([
+         _program([
              AST.VarDecl(
                  "x",
                  _bt("int"),
@@ -278,7 +288,7 @@ def test_initializers(subtests: pytest.Subtests) -> None:
              ),
          ])),
         ("int a[2][2] = { {1, 2}, {3, 4} };",
-         AST.Program([
+         _program([
              AST.VarDecl(
                  "a",
                  AST.ArrayType(AST.ArrayType(_bt("int"), AST.IntLiteral(2)), AST.IntLiteral(2)),
