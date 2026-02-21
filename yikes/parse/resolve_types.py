@@ -143,8 +143,8 @@ def _resolve_tag_type(ctype: AST.StructType | AST.UnionType | AST.EnumType, scop
             return AST.UnionType(ctype.name, [_resolve_field(field, scopes) for field in fields])
     return ctype
 
-def _build_type(specs: list[AST.DeclSpec], declarator: AST.Declarator | AST.AbstractDeclarator | None, scopes: list[AST.Scope]) -> AST.CType:
-    base = next(_resolve_ctype(spec, scopes) for spec in specs if isinstance(spec, AST.CType))
+def _build_type(specs: AST.DeclSpecs, declarator: AST.Declarator | AST.AbstractDeclarator | None, scopes: list[AST.Scope]) -> AST.CType:
+    base = _resolve_ctype(specs.ctype, scopes)
     if declarator is None:
         return base
     for mod in reversed(_collect_mods(declarator)):

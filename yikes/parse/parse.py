@@ -106,14 +106,14 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 return False
         return False
 
-    def has_storage(specs: list[AST.DeclSpec], name: str) -> bool:
-        return any(isinstance(s, AST.StorageClassSpec) and s.name == name for s in specs)
+    def has_storage(specs: AST.DeclSpecs, name: str) -> bool:
+        return any(isinstance(s, AST.StorageClassSpec) and s.name == name for s in specs.specs)
 
-    def is_void_param(specs: list[AST.DeclSpec], decl: AST.Declarator | AST.AbstractDeclarator | None, params: list[AST.ParamDecl]) -> bool:
+    def is_void_param(specs: AST.DeclSpecs, decl: AST.Declarator | AST.AbstractDeclarator | None, params: list[AST.ParamDecl]) -> bool:
         if decl is not None or params:
             return False
         match specs:
-            case [AST.BuiltinType(keywords=[AST.TypeKeyword(name="void")])]:
+            case AST.DeclSpecs(ctype=AST.BuiltinType(keywords=[AST.TypeKeyword(name="void")])):
                 return True
         return False
 
@@ -299,10 +299,11 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             return AST.VarDecl(name, ctype, decls[0].init, span=span_from(start_pos))
         return AST.Declaration(specs, decls, span=span_from(start_pos))
 
-    def parse_decl_specs(allow_storage: bool = True, allow_function: bool = True) -> list[AST.DeclSpec]:
+    def parse_decl_specs(allow_storage: bool = True, allow_function: bool = True) -> AST.DeclSpecs:
+        start_pos = pos
         specs: list[AST.DeclSpec] = []
+        types: list[AST.CType] = []
         builtins: list[AST.TypeKeyword] = []
-        seen_type_spec = False
 
         while True:
             tok = peek()
@@ -323,31 +324,27 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 builtins.append(AST.TypeKeyword(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
                 advance()
             elif tok.kind == TokenKind.KW_STRUCT:
-                specs.append(parse_struct_type())
-                seen_type_spec = True
+                types.append(parse_struct_type())
             elif tok.kind == TokenKind.KW_UNION:
-                specs.append(parse_union_type())
-                seen_type_spec = True
+                types.append(parse_union_type())
             elif tok.kind == TokenKind.KW_ENUM:
-                specs.append(parse_enum_type())
-                seen_type_spec = True
+                types.append(parse_enum_type())
             elif tok.kind == TokenKind.IDENT and tok.value in typedef_names:
                 name = ident(advance())
-                specs.append(AST.NamedType(name, span=name.span))
-                seen_type_spec = True
+                types.append(AST.NamedType(name, span=name.span))
             else:
                 break
 
         if builtins:
-            if seen_type_spec:
-                error("Multiple type specifiers")
             builtins_span = merge_spans(builtins[0].span, builtins[-1].span)
-            specs.append(AST.BuiltinType(builtins, span=builtins_span))
-            seen_type_spec = True
+            types.append(AST.BuiltinType(builtins, span=builtins_span))
 
-        if not seen_type_spec:
+        if not types:
             error("Expected type specifier")
-        return specs
+        if len(types) != 1:
+            error("Multiple type specifiers")
+
+        return AST.DeclSpecs(specs, types[0], span=span_from(start_pos))
 
     def parse_struct_type() -> AST.StructType:
         start_pos = pos
@@ -770,8 +767,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         declarator = parse_abstract_declarator() if looks_like_abstract_declarator() else None
         return build_type(specs, declarator)
 
-    def build_type(specs: list[AST.DeclSpec], declarator: AST.Declarator | AST.AbstractDeclarator | None) -> AST.CType:
-        base = base_type(specs)
+    def build_type(specs: AST.DeclSpecs, declarator: AST.Declarator | AST.AbstractDeclarator | None) -> AST.CType:
+        base = specs.ctype
         if declarator is None:
             return base
         mods = collect_mods(declarator)
@@ -793,12 +790,6 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 return AST.Param(declarator_name(decl), build_type(param.specs, decl), span=param.span)
             case AST.AbstractDeclarator() as decl:
                 return AST.Param(None, build_type(param.specs, decl), span=param.span)
-
-    def base_type(specs: list[AST.DeclSpec]) -> AST.CType:
-        for spec in specs:
-            if isinstance(spec, AST.CType):
-                return spec
-        error("Missing type specifier")
 
     def collect_mods(decl: AST.Declarator | AST.AbstractDeclarator) -> list[AST.Pointer | AST.DirectSuffix]:
         mods: list[AST.Pointer | AST.DirectSuffix] = []
@@ -848,15 +839,14 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             direct = decl.direct
         error("Expected declarator name")
 
-    def extract_tag_def(specs: list[AST.DeclSpec]) -> AST.StructDef | AST.UnionDef | AST.EnumDef | None:
-        for spec in specs:
-            match spec:
-                case AST.StructType(fields=[*fields], name=name, span=span):
-                    return AST.StructDef(name, fields, span=span)
-                case AST.UnionType(fields=[*fields], name=name, span=span):
-                    return AST.UnionDef(name, fields, span=span)
-                case AST.EnumType(values=[*values], name=name, span=span):
-                    return AST.EnumDef(name, values, span=span)
+    def extract_tag_def(specs: AST.DeclSpecs) -> AST.StructDef | AST.UnionDef | AST.EnumDef | None:
+        match specs.ctype:
+            case AST.StructType(fields=[*fields], name=name, span=span):
+                return AST.StructDef(name, fields, span=span)
+            case AST.UnionType(fields=[*fields], name=name, span=span):
+                return AST.UnionDef(name, fields, span=span)
+            case AST.EnumType(values=[*values], name=name, span=span):
+                return AST.EnumDef(name, values, span=span)
         return None
 
     return parse_program()

@@ -12,6 +12,9 @@ def _bt(name: str) -> AST.BuiltinType:
 def _id(name: str) -> AST.Identifier:
     return AST.Identifier(name)
 
+def _specs(ctype: AST.CType, *specs: AST.DeclSpec) -> AST.DeclSpecs:
+    return AST.DeclSpecs(list(specs), ctype)
+
 def _span(start_line: int, start_col: int, end_line: int, end_col: int) -> AST.Span:
     return AST.Span(AST.Position(start_line, start_col), AST.Position(end_line, end_col))
 
@@ -36,7 +39,7 @@ def _init(name: str | None, init: AST.Initializer | None = None, *, pointer: AST
           nested: AST.Declarator | None = None, suffixes: list[AST.DirectSuffix] | None = None) -> AST.InitDeclarator:
     return AST.InitDeclarator(_decl(name, pointer=pointer, nested=nested, suffixes=suffixes), init)
 
-def _param(specs: list[AST.DeclSpec], declarator: AST.Declarator | AST.AbstractDeclarator | None = None) -> AST.ParamDecl:
+def _param(specs: AST.DeclSpecs, declarator: AST.Declarator | AST.AbstractDeclarator | None = None) -> AST.ParamDecl:
     return AST.ParamDecl(specs, declarator)
 
 def _func_suffix(params: list[AST.ParamDecl] | None, variadic: bool = False) -> AST.DirectSuffix:
@@ -140,36 +143,38 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
         ("static const int (*fp), a[3], f(int [3], int *), g(int, ...);",
          _program([
              AST.Declaration(
-                 [AST.StorageClassSpec("static"), AST.TypeQualifier("const"), _bt("int")],
+                 _specs(_bt("int"), AST.StorageClassSpec("static"), AST.TypeQualifier("const")),
                  [_init(None, nested=_decl("fp", pointer=_ptr())),
                   _init("a", suffixes=[_array_suffix(AST.IntLiteral(3))]),
                   _init("f", suffixes=[_func_suffix([
-                      _param([_bt("int")], AST.AbstractDeclarator(None, AST.DirectAbstractDeclarator(None, [_array_suffix(AST.IntLiteral(3))]))),
-                      _param([_bt("int")], AST.AbstractDeclarator(_ptr(), None)),
+                      _param(_specs(_bt("int")), AST.AbstractDeclarator(None, AST.DirectAbstractDeclarator(None, [_array_suffix(AST.IntLiteral(3))]))),
+                      _param(_specs(_bt("int")), AST.AbstractDeclarator(_ptr(), None)),
                   ])]),
-                  _init("g", suffixes=[_func_suffix([_param([_bt("int")])], variadic=True)])],
+                  _init("g", suffixes=[_func_suffix([_param(_specs(_bt("int")))], variadic=True)])],
              ),
          ])),
         ("inline int f(void), g(int y);",
          _program([
              AST.Declaration(
-                 [AST.FunctionSpec("inline"), _bt("int")],
+                 _specs(_bt("int"), AST.FunctionSpec("inline")),
                  [_init("f", suffixes=[_func_suffix([])]),
-                  _init("g", suffixes=[_func_suffix([_param([_bt("int")], _decl("y"))])])],
+                  _init("g", suffixes=[_func_suffix([_param(_specs(_bt("int")), _decl("y"))])])],
              ),
          ])),
         ("int f(int a[static 3]), g;",
          _program([
              AST.Declaration(
-                 [_bt("int")],
-                 [_init("f", suffixes=[_func_suffix([_param([_bt("int")], _decl("a", suffixes=[AST.DirectSuffix(None, AST.IntLiteral(3), True, False)]))])]),
+                 _specs(_bt("int")),
+                 [_init("f", suffixes=[_func_suffix([
+                     _param(_specs(_bt("int")), _decl("a", suffixes=[AST.DirectSuffix(None, AST.IntLiteral(3), True, False)])),
+                  ])]),
                   _init("g")],
              ),
          ])),
         ("const int *const p, *q;",
          _program([
              AST.Declaration(
-                 [AST.TypeQualifier("const"), _bt("int")],
+                 _specs(_bt("int"), AST.TypeQualifier("const")),
                  [_init("p", pointer=_ptr([AST.TypeQualifier("const")])),
                   _init("q", pointer=_ptr())],
              ),

@@ -170,7 +170,7 @@ def _ensure_block(stmt: AST.Stmt) -> AST.Block:
         return stmt
     return AST.Block([stmt], scope=AST.Scope())
 
-def _normalize_declaration(specs: list[AST.DeclSpec], declarators: list[AST.InitDeclarator]) -> list[AST.Declaration]:
+def _normalize_declaration(specs: AST.DeclSpecs, declarators: list[AST.InitDeclarator]) -> list[AST.Declaration]:
     if len(declarators) <= 1:
         return [AST.Declaration(specs, declarators)]
     return [AST.Declaration(specs, [declarator]) for declarator in declarators]

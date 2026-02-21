@@ -91,10 +91,8 @@ def _bind_declaration(node: AST.Declaration, scope: AST.Scope) -> None:
         name = _declarator_name(declarator.declarator)
         _add_ident(scope, name, kind, None, node)
 
-def _bind_decl_specs(specs: list[AST.DeclSpec], scope: AST.Scope, owner: AST.SymbolDecl) -> None:
-    for spec in specs:
-        if isinstance(spec, AST.CType):
-            _bind_ctype_defs(spec, scope, owner)
+def _bind_decl_specs(specs: AST.DeclSpecs, scope: AST.Scope, owner: AST.SymbolDecl) -> None:
+    _bind_ctype_defs(specs.ctype, scope, owner)
 
 def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
     for param in params:
@@ -149,8 +147,8 @@ def _add_label(scope: AST.Scope, name: AST.Identifier, decl: AST.Label) -> None:
     if name.name not in scope.labels:
         scope.labels[name.name] = AST.Symbol(name.name, AST.SymbolKind.LABEL, None, decl)
 
-def _has_storage(specs: list[AST.DeclSpec], name: str) -> bool:
-    return any(isinstance(spec, AST.StorageClassSpec) and spec.name == name for spec in specs)
+def _has_storage(specs: AST.DeclSpecs, name: str) -> bool:
+    return any(isinstance(spec, AST.StorageClassSpec) and spec.name == name for spec in specs.specs)
 
 def _declarator_name(decl: AST.Declarator) -> AST.Identifier:
     direct = decl.direct
