@@ -10,6 +10,9 @@ from yikes.parse.parse import parse
 def _bt(name: str) -> AST.BuiltinType:
     return AST.BuiltinType(name)
 
+def _id(name: str) -> AST.Identifier:
+    return AST.Identifier(name)
+
 def _block(items: list[AST.Stmt]) -> AST.Block:
     return AST.Block(items, scope=AST.Scope())
 
@@ -17,7 +20,7 @@ def _ts(name: str) -> AST.TypeSpec:
     return AST.TypeSpec(_bt(name))
 
 def _decl(name: str, *, suffixes: list[AST.DirectSuffix] | None = None) -> AST.Declarator:
-    return AST.Declarator(None, AST.DirectDeclarator(name, None, suffixes or []))
+    return AST.Declarator(None, AST.DirectDeclarator(_id(name), None, suffixes or []))
 
 def _init(name: str, init: AST.Initializer | None = None, *, suffixes: list[AST.DirectSuffix] | None = None) -> AST.InitDeclarator:
     return AST.InitDeclarator(_decl(name, suffixes=suffixes), init)
@@ -26,13 +29,13 @@ def _array_suffix(size: AST.Expr | None) -> AST.DirectSuffix:
     return AST.DirectSuffix(None, size, False, False)
 
 def _stmt(source: str) -> AST.Stmt:
-    program = normalize(parse(f"int main() {{ {source} }}"))
+    program = normalize(parse(f"int main() {{ {source} }}", with_spans=False))
     item = program.items[0]
     assert isinstance(item, AST.FunctionDef)
     return item.body.items[0]
 
 def _block_items(source: str) -> list[AST.Stmt]:
-    program = normalize(parse(f"int main() {{ {source} }}"))
+    program = normalize(parse(f"int main() {{ {source} }}", with_spans=False))
     item = program.items[0]
     assert isinstance(item, AST.FunctionDef)
     return item.body.items
@@ -55,7 +58,7 @@ def test_normalize_for_loops(subtests: pytest.Subtests) -> None:
          ])),
         ("for (int i = 0; i < 3; i = i + 1) { x; }",
          _block([
-             AST.VarDecl("i", _bt("int"), AST.IntLiteral(0)),
+             AST.VarDecl(_id("i"), _bt("int"), AST.IntLiteral(0)),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
                  _block([
@@ -144,7 +147,7 @@ def test_normalize_array_declaration(subtests: pytest.Subtests) -> None:
     cases = [
         ("int a[2];",
          [
-             AST.VarDecl("a", AST.ArrayType(_bt("int"), AST.IntLiteral(2)), None),
+             AST.VarDecl(_id("a"), AST.ArrayType(_bt("int"), AST.IntLiteral(2)), None),
          ]),
     ]
 

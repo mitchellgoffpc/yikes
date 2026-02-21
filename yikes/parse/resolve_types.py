@@ -69,7 +69,7 @@ def _resolve_function_def(node: AST.FunctionDef, scopes: list[AST.Scope]) -> Non
     _set_symbol_ctype(scopes[-1], node.name, AST.FunctionType(return_type, params, node.variadic))
     function_scopes = [*scopes, node.body.scope]
     for param in params:
-        if param.name:
+        if param.name is not None:
             _set_symbol_ctype(function_scopes[-1], param.name, param.ctype)
     for item in node.body.items:
         _resolve_stmt(item, function_scopes)
@@ -85,13 +85,13 @@ def _resolve_declaration(node: AST.Declaration, scopes: list[AST.Scope]) -> None
 
 def _resolve_tag_def(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> None:
     match ctype:
-        case AST.StructType(name=str() as name, fields=[*fields]):
+        case AST.StructType(name=name, fields=[*fields]) if name is not None:
             resolved_fields = [_resolve_field(field, scopes) for field in fields]
             _set_tag_ctype(scopes[-1], name, AST.StructType(name, resolved_fields))
-        case AST.UnionType(name=str() as name, fields=[*fields]):
+        case AST.UnionType(name=name, fields=[*fields]) if name is not None:
             resolved_fields = [_resolve_field(field, scopes) for field in fields]
             _set_tag_ctype(scopes[-1], name, AST.UnionType(name, resolved_fields))
-        case AST.EnumType(name=str() as name, values=[*_]):
+        case AST.EnumType(name=name, values=[*_]) if name is not None:
             _set_tag_ctype(scopes[-1], name, ctype)
 
 def _resolve_field(field: AST.Field, scopes: list[AST.Scope]) -> AST.Field:
@@ -118,20 +118,20 @@ def _resolve_ctype(ctype: AST.CType, scopes: list[AST.Scope], seen: set[str] | N
         case _:
             raise TypeError(f"Unknown ctype: {type(ctype).__name__}")
 
-def _resolve_named_type(name: str, scopes: list[AST.Scope], seen: set[str] | None) -> AST.CType:
+def _resolve_named_type(name: AST.Identifier, scopes: list[AST.Scope], seen: set[str] | None) -> AST.CType:
     if seen is None:
         seen = set()
-    if name in seen:
+    if name.name in seen:
         return AST.NamedType(name)
-    seen.add(name)
-    match _lookup_ident(scopes, name):
+    seen.add(name.name)
+    match _lookup_ident(scopes, name.name):
         case AST.Symbol(kind=AST.SymbolKind.TYPEDEF, ctype=ctype) if ctype is not None:
             return _resolve_ctype(ctype, scopes, seen)
     return AST.NamedType(name)
 
 def _resolve_tag_type(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> AST.CType:
-    if ctype.name:
-        symbol = _lookup_tag(scopes, ctype.name)
+    if ctype.name is not None:
+        symbol = _lookup_tag(scopes, ctype.name.name)
         if symbol and symbol.ctype is not None:
             match ctype:
                 case AST.EnumType(values=None) | AST.StructType(fields=None) | AST.UnionType(fields=None):
@@ -151,22 +151,20 @@ def _build_type(specs: list[AST.DeclSpec], declarator: AST.Declarator | AST.Abst
         match mod:
             case AST.Pointer():
                 base = AST.PointerType(base)
-            case AST.DirectSuffix(array_size=array_size) if array_size is not None:
-                base = AST.ArrayType(base, array_size)
-            case AST.DirectSuffix(params=None):
-                base = AST.ArrayType(base, None)
-            case AST.DirectSuffix(params=params):
+            case AST.DirectSuffix(array_size=None, params=[*params]):
                 base = AST.FunctionType(base, [_build_param(param, scopes) for param in params], mod.is_variadic)
+            case AST.DirectSuffix(array_size=array_size):
+                base = AST.ArrayType(base, array_size)
     return _resolve_ctype(base, scopes)
 
 def _build_param(param: AST.ParamDecl, scopes: list[AST.Scope]) -> AST.Param:
     match param.declarator:
         case None:
-            return AST.Param("", _build_type(param.specs, None, scopes))
+            return AST.Param(None, _build_type(param.specs, None, scopes))
         case AST.Declarator():
             return AST.Param(_declarator_name(param.declarator), _build_type(param.specs, param.declarator, scopes))
         case AST.AbstractDeclarator():
-            return AST.Param("", _build_type(param.specs, param.declarator, scopes))
+            return AST.Param(None, _build_type(param.specs, param.declarator, scopes))
 
 def _collect_mods(decl: AST.Declarator | AST.AbstractDeclarator) -> list[AST.Pointer | AST.DirectSuffix]:
     mods: list[AST.Pointer | AST.DirectSuffix] = []
@@ -205,7 +203,7 @@ def _collect_mods(decl: AST.Declarator | AST.AbstractDeclarator) -> list[AST.Poi
             walk_abstract(decl)
     return mods
 
-def _declarator_name(decl: AST.Declarator) -> str:
+def _declarator_name(decl: AST.Declarator) -> AST.Identifier:
     direct = decl.direct
     while direct is not None:
         if direct.name is not None:
@@ -228,10 +226,10 @@ def _lookup_tag(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
             return symbol
     return None
 
-def _set_symbol_ctype(scope: AST.Scope, name: str, ctype: AST.CType) -> None:
-    if (symbol := scope.idents.get(name)) is not None and symbol.ctype is None:
+def _set_symbol_ctype(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType) -> None:
+    if (symbol := scope.idents.get(name.name)) is not None and symbol.ctype is None:
         symbol.ctype = ctype
 
-def _set_tag_ctype(scope: AST.Scope, name: str, ctype: AST.CType) -> None:
-    if (symbol := scope.tags.get(name)) is not None:
+def _set_tag_ctype(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType) -> None:
+    if (symbol := scope.tags.get(name.name)) is not None:
         symbol.ctype = ctype

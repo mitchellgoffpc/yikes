@@ -98,7 +98,7 @@ def _bind_decl_specs(specs: list[AST.DeclSpec], scope: AST.Scope, owner: AST.Sym
 
 def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
     for param in params:
-        if param.name:
+        if param.name is not None:
             _add_ident(scope, param.name, AST.SymbolKind.VAR, None, param)
         _bind_ctype_defs(param.ctype, scope, None)
 
@@ -137,22 +137,22 @@ def _bind_param_type_defs(params: list[AST.Param], scope: AST.Scope, owner: AST.
     for param in params:
         _bind_ctype_defs(param.ctype, scope, owner)
 
-def _add_ident(scope: AST.Scope, name: str, kind: AST.SymbolKind, ctype: AST.CType | None, decl: AST.SymbolDecl | None) -> None:
-    if name and name not in scope.idents:
-        scope.idents[name] = AST.Symbol(name, kind, ctype, decl)
+def _add_ident(scope: AST.Scope, name: AST.Identifier, kind: AST.SymbolKind, ctype: AST.CType | None, decl: AST.SymbolDecl | None) -> None:
+    if name.name and name.name not in scope.idents:
+        scope.idents[name.name] = AST.Symbol(name.name, kind, ctype, decl)
 
-def _add_tag(scope: AST.Scope, name: str, ctype: AST.CType, decl: AST.SymbolDecl | None) -> None:
-    if name not in scope.tags:
-        scope.tags[name] = AST.Symbol(name, AST.SymbolKind.TAG, ctype, decl)
+def _add_tag(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType, decl: AST.SymbolDecl | None) -> None:
+    if name.name not in scope.tags:
+        scope.tags[name.name] = AST.Symbol(name.name, AST.SymbolKind.TAG, ctype, decl)
 
-def _add_label(scope: AST.Scope, name: str, decl: AST.Label) -> None:
-    if name not in scope.labels:
-        scope.labels[name] = AST.Symbol(name, AST.SymbolKind.LABEL, None, decl)
+def _add_label(scope: AST.Scope, name: AST.Identifier, decl: AST.Label) -> None:
+    if name.name not in scope.labels:
+        scope.labels[name.name] = AST.Symbol(name.name, AST.SymbolKind.LABEL, None, decl)
 
 def _has_storage(specs: list[AST.DeclSpec], name: str) -> bool:
     return any(isinstance(spec, AST.StorageClassSpec) and spec.name == name for spec in specs)
 
-def _declarator_name(decl: AST.Declarator) -> str:
+def _declarator_name(decl: AST.Declarator) -> AST.Identifier:
     direct = decl.direct
     while direct is not None:
         if direct.name is not None:

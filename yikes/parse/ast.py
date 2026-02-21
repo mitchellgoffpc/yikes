@@ -5,6 +5,14 @@ from enum import StrEnum
 from typing import NamedTuple
 
 
+class Position(NamedTuple):
+    line: int
+    col: int
+
+class Span(NamedTuple):
+    start: Position
+    end: Position
+
 class SymbolKind(StrEnum):
     VAR = "var"
     FUNC = "func"
@@ -32,7 +40,7 @@ class Program(NamedTuple):
     scope: Scope
 
 class FunctionDef(NamedTuple):
-    name: str
+    name: Identifier
     params: list[Param]
     return_type: CType
     variadic: bool
@@ -40,12 +48,12 @@ class FunctionDef(NamedTuple):
     scope: Scope
 
 class VarDecl(NamedTuple):
-    name: str
+    name: Identifier
     ctype: CType
     init: Initializer | None
 
 class TypeDef(NamedTuple):
-    name: str
+    name: Identifier
     ctype: CType
 
 class Declaration(NamedTuple):
@@ -53,7 +61,7 @@ class Declaration(NamedTuple):
     declarators: list[InitDeclarator]
 
 class Param(NamedTuple):
-    name: str
+    name: Identifier | None
     ctype: CType
 
 class Block(NamedTuple):
@@ -61,24 +69,24 @@ class Block(NamedTuple):
     scope: Scope
 
 class Field(NamedTuple):
-    name: str | None
+    name: Identifier | None
     ctype: CType
     bit_width: Expr | None
 
 class StructDef(NamedTuple):
-    name: str | None
+    name: Identifier | None
     fields: list[Field] | None
 
 class UnionDef(NamedTuple):
-    name: str | None
+    name: Identifier | None
     fields: list[Field] | None
 
 class Enumerator(NamedTuple):
-    name: str
+    name: Identifier
     value: Expr | None
 
 class EnumDef(NamedTuple):
-    name: str | None
+    name: Identifier | None
     values: list[Enumerator]
 
 class InitDeclarator(NamedTuple):
@@ -90,7 +98,7 @@ class Declarator(NamedTuple):
     direct: DirectDeclarator
 
 class DirectDeclarator(NamedTuple):
-    name: str | None
+    name: Identifier | None
     nested: Declarator | None
     suffixes: list[DirectSuffix]
 
@@ -160,11 +168,11 @@ class Default(NamedTuple):
     body: Block
 
 class Label(NamedTuple):
-    name: str
+    name: Identifier
     stmt: Stmt
 
 class Goto(NamedTuple):
-    target: str
+    target: Identifier
 
 class CompoundLiteral(NamedTuple):
     ctype: CType
@@ -194,7 +202,7 @@ class Call(NamedTuple):
 
 class Member(NamedTuple):
     value: Expr
-    name: str
+    name: Identifier
     through_pointer: bool
 
 class ArraySubscript(NamedTuple):
@@ -230,6 +238,7 @@ class StringLiteral(NamedTuple):
 
 class Identifier(NamedTuple):
     name: str
+    span: Span | None = None
 
 class InitList(NamedTuple):
     items: list[InitializerItem]
@@ -239,7 +248,7 @@ class InitializerItem(NamedTuple):
     value: Initializer
 
 class Designator(NamedTuple):
-    field: str | None
+    field: Identifier | None
     index: Expr | None
 
 class StorageClassSpec(NamedTuple):
@@ -270,19 +279,19 @@ class FunctionType(NamedTuple):
     variadic: bool
 
 class StructType(NamedTuple):
-    name: str | None
+    name: Identifier | None
     fields: list[Field] | None
 
 class UnionType(NamedTuple):
-    name: str | None
+    name: Identifier | None
     fields: list[Field] | None
 
 class EnumType(NamedTuple):
-    name: str | None
+    name: Identifier | None
     values: list[Enumerator] | None
 
 class NamedType(NamedTuple):
-    name: str
+    name: Identifier
 
 type Expr = (
     Assign | Binary | Unary | IncDec | Call | Member | ArraySubscript | Conditional | Cast | Sizeof

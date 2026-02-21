@@ -48,10 +48,23 @@ _ASSIGN_OPS: dict[TokenKind, str] = {
 }
 
 
-def parse(source: str) -> AST.Program:
+def parse(source: str, *, with_spans: bool = True) -> AST.Program:
     tokens = lex(source)
     pos = 0
     typedef_names: set[str] = set()
+
+    def _span_for_ident(tok: Token) -> AST.Span | None:
+        assert isinstance(tok.value, str)
+        if not with_spans:
+            return None
+        start = AST.Position(tok.line, tok.col)
+        end = AST.Position(tok.line, tok.col + len(tok.value))
+        return AST.Span(start, end)
+
+    def _ident_from_token(tok: Token) -> AST.Identifier:
+        assert tok.kind == TokenKind.IDENT
+        assert isinstance(tok.value, str)
+        return AST.Identifier(tok.value, _span_for_ident(tok))
 
     def peek(offset: int = 0) -> Token:
         i = pos + offset
@@ -84,19 +97,15 @@ def parse(source: str) -> AST.Program:
             error(f"Expected {kind.value}")
         return advance()
 
-    def match_ident() -> str | None:
+    def match_ident() -> AST.Identifier | None:
         if at(TokenKind.IDENT):
-            value = advance().value
-            assert isinstance(value, str)
-            return value
+            return _ident_from_token(advance())
         return None
 
-    def expect_ident() -> str:
+    def expect_ident() -> AST.Identifier:
         if not at(TokenKind.IDENT):
             error("Expected identifier")
-        value = advance().value
-        assert isinstance(value, str)
-        return value
+        return _ident_from_token(advance())
 
     def error(message: str) -> NoReturn:
         tok = peek()
@@ -182,7 +191,7 @@ def parse(source: str) -> AST.Program:
             if len(decls) == 1 and decls[0].init is None:
                 name = declarator_name(decls[0].declarator)
                 ctype = build_type(specs, decls[0].declarator)
-                typedef_names.add(name)
+                typedef_names.add(name.name)
                 return AST.TypeDef(name, ctype)
             return AST.Declaration(specs, decls)
 
@@ -316,7 +325,7 @@ def parse(source: str) -> AST.Program:
             if len(decls) == 1 and decls[0].init is None:
                 name = declarator_name(decls[0].declarator)
                 ctype = build_type(specs, decls[0].declarator)
-                typedef_names.add(name)
+                typedef_names.add(name.name)
                 return AST.TypeDef(name, ctype)
             return AST.Declaration(specs, decls)
 
@@ -366,9 +375,7 @@ def parse(source: str) -> AST.Program:
                 seen_type_spec = True
                 continue
             if tok.kind == TokenKind.IDENT and tok.value in typedef_names:
-                assert isinstance(tok.value, str)
-                specs.append(AST.TypeSpec(AST.NamedType(tok.value)))
-                advance()
+                specs.append(AST.TypeSpec(AST.NamedType(_ident_from_token(advance()))))
                 seen_type_spec = True
                 continue
             break
@@ -454,7 +461,7 @@ def parse(source: str) -> AST.Program:
         return AST.Declarator(pointer, direct)
 
     def parse_direct_declarator() -> AST.DirectDeclarator:
-        name: str | None = None
+        name: AST.Identifier | None = None
         nested: AST.Declarator | None = None
         if at(TokenKind.IDENT):
             name = expect_ident()
@@ -787,10 +794,7 @@ def parse(source: str) -> AST.Program:
             assert isinstance(value, str)
             return AST.StringLiteral(value)
         if tok.kind == TokenKind.IDENT:
-            advance()
-            value = tok.value
-            assert isinstance(value, str)
-            return AST.Identifier(value)
+            return _ident_from_token(advance())
         if match(TokenKind.LPAREN):
             expr = parse_expr()
             expect(TokenKind.RPAREN)
@@ -808,29 +812,23 @@ def parse(source: str) -> AST.Program:
             return base
         mods = collect_mods(declarator)
         for mod in reversed(mods):
-            if isinstance(mod, AST.Pointer):
-                base = AST.PointerType(base)
-            elif mod.array_size is not None or mod.params is None:
-                base = AST.ArrayType(base, mod.array_size)
-            else:
-                params = build_params(mod.params)
-                base = AST.FunctionType(base, params, mod.is_variadic)
+            match mod:
+                case AST.Pointer():
+                    base = AST.PointerType(base)
+                case AST.DirectSuffix(array_size=None, params=[*params], is_variadic=is_variadic):
+                    base = AST.FunctionType(base, [build_param(param) for param in params], is_variadic)
+                case AST.DirectSuffix(array_size=array_size):
+                    base = AST.ArrayType(base, array_size)
         return base
 
-    def build_params(params: list[AST.ParamDecl]) -> list[AST.Param]:
-        items: list[AST.Param] = []
-        for param in params:
-            if param.declarator is None:
-                name = ""
-                ctype = build_type(param.specs, None)
-            elif isinstance(param.declarator, AST.Declarator):
-                name = declarator_name(param.declarator)
-                ctype = build_type(param.specs, param.declarator)
-            else:
-                name = ""
-                ctype = build_type(param.specs, param.declarator)
-            items.append(AST.Param(name, ctype))
-        return items
+    def build_param(param: AST.ParamDecl) -> AST.Param:
+        match param.declarator:
+            case None:
+                return AST.Param(None, build_type(param.specs, None))
+            case AST.Declarator() as decl:
+                return AST.Param(declarator_name(decl), build_type(param.specs, decl))
+            case AST.AbstractDeclarator() as decl:
+                return AST.Param(None, build_type(param.specs, decl))
 
     def base_type(specs: list[AST.DeclSpec]) -> AST.CType:
         for spec in specs:
@@ -874,7 +872,7 @@ def parse(source: str) -> AST.Program:
             walk_abstract(decl)
         return mods
 
-    def declarator_name(decl: AST.Declarator) -> str:
+    def declarator_name(decl: AST.Declarator) -> AST.Identifier:
         direct = decl.direct
         while direct is not None:
             if direct.name is not None:
