@@ -42,6 +42,7 @@ class Program(NamedTuple):
 
 class FunctionDef(NamedTuple):
     name: Identifier
+    specs: DeclSpecs
     params: list[Param]
     return_type: CType
     variadic: bool
@@ -57,6 +58,11 @@ class VarDecl(NamedTuple):
 
 class TypeDef(NamedTuple):
     name: Identifier
+    ctype: CType
+    span: Span | None = None
+
+class DeclSpecs(NamedTuple):
+    specs: list[DeclSpec]
     ctype: CType
     span: Span | None = None
 
@@ -83,11 +89,13 @@ class Field(NamedTuple):
 
 class StructDef(NamedTuple):
     name: Identifier | None
+    specs: list[DeclSpec]
     fields: list[Field] | None
     span: Span | None = None
 
 class UnionDef(NamedTuple):
     name: Identifier | None
+    specs: list[DeclSpec]
     fields: list[Field] | None
     span: Span | None = None
 
@@ -98,6 +106,7 @@ class Enumerator(NamedTuple):
 
 class EnumDef(NamedTuple):
     name: Identifier | None
+    specs: list[DeclSpec]
     values: list[Enumerator]
     span: Span | None = None
 
@@ -368,8 +377,3 @@ Stmt = (
     | For | Break | Continue | Switch | Case | Default | Label | Goto
 )
 SymbolDecl = FunctionDef | VarDecl | TypeDef | Declaration | StructDef | UnionDef | EnumDef | Enumerator | Label | Param
-
-class DeclSpecs(NamedTuple):
-    specs: list[DeclSpec]
-    ctype: CType
-    span: Span | None = None

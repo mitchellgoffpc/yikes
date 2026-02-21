@@ -140,7 +140,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 error("Function definition requires function type")
             else:
                 body = parse_block()
-                return AST.FunctionDef(name, ctype.params, ctype.return_type, ctype.variadic, body, scope=AST.Scope(), span=span_from(start_pos))
+                return AST.FunctionDef(name, specs, ctype.params, ctype.return_type, ctype.variadic, body, scope=AST.Scope(), span=span_from(start_pos))
 
         expect(TokenKind.SEMI)
         if has_storage(specs, "typedef"):
@@ -841,12 +841,12 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
     def extract_tag_def(specs: AST.DeclSpecs) -> AST.StructDef | AST.UnionDef | AST.EnumDef | None:
         match specs.ctype:
-            case AST.StructType(fields=[*fields], name=name, span=span):
-                return AST.StructDef(name, fields, span=span)
-            case AST.UnionType(fields=[*fields], name=name, span=span):
-                return AST.UnionDef(name, fields, span=span)
-            case AST.EnumType(values=[*values], name=name, span=span):
-                return AST.EnumDef(name, values, span=span)
+            case AST.StructType(fields=[*fields], name=name, span=type_span):
+                return AST.StructDef(name, specs.specs, fields, span=type_span)
+            case AST.UnionType(fields=[*fields], name=name, span=type_span):
+                return AST.UnionDef(name, specs.specs, fields, span=type_span)
+            case AST.EnumType(values=[*values], name=name, span=type_span):
+                return AST.EnumDef(name, specs.specs, values, span=type_span)
         return None
 
     return parse_program()

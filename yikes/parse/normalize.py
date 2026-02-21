@@ -16,17 +16,17 @@ def normalize(program: AST.Program) -> AST.Program:
 def _normalize_external_decl(node: AST.ExternalDecl) -> list[AST.ExternalDecl]:
     match node:
         case AST.FunctionDef():
-            return [AST.FunctionDef(node.name, node.params, node.return_type, node.variadic, _normalize_block(node.body), scope=AST.Scope())]
+            return [AST.FunctionDef(node.name, node.specs, node.params, node.return_type, node.variadic, _normalize_block(node.body), scope=AST.Scope())]
         case AST.VarDecl():
             return [AST.VarDecl(node.name, node.ctype, _normalize_initializer(node.init) if node.init else None)]
         case AST.TypeDef():
             return [node]
         case AST.StructDef():
-            return [AST.StructDef(node.name, _normalize_fields(node.fields))]
+            return [AST.StructDef(node.name, node.specs, _normalize_fields(node.fields))]
         case AST.UnionDef():
-            return [AST.UnionDef(node.name, _normalize_fields(node.fields))]
+            return [AST.UnionDef(node.name, node.specs, _normalize_fields(node.fields))]
         case AST.EnumDef():
-            return [AST.EnumDef(node.name, [_normalize_enumerator(value) for value in node.values])]
+            return [AST.EnumDef(node.name, node.specs, [_normalize_enumerator(value) for value in node.values])]
         case AST.Declaration():
             return cast(list[AST.ExternalDecl], _normalize_declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators]))
         case _:
@@ -41,11 +41,11 @@ def _normalize_stmt(node: AST.Stmt) -> AST.Stmt:
         case AST.TypeDef():
             return node
         case AST.StructDef():
-            return AST.StructDef(node.name, _normalize_fields(node.fields))
+            return AST.StructDef(node.name, node.specs, _normalize_fields(node.fields))
         case AST.UnionDef():
-            return AST.UnionDef(node.name, _normalize_fields(node.fields))
+            return AST.UnionDef(node.name, node.specs, _normalize_fields(node.fields))
         case AST.EnumDef():
-            return AST.EnumDef(node.name, [_normalize_enumerator(value) for value in node.values])
+            return AST.EnumDef(node.name, node.specs, [_normalize_enumerator(value) for value in node.values])
         case AST.Declaration():
             return AST.Declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators])
         case AST.ExprStmt():
