@@ -123,6 +123,11 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             items.extend(parse_external_decl())
         return AST.Program(items, scope=AST.Scope(), span=span_from(start_pos))
 
+    def ensure_block(stmt: AST.Stmt) -> AST.Block:
+        if isinstance(stmt, AST.Block):
+            return stmt
+        return AST.Block([stmt], scope=AST.Scope(), span=stmt.span)
+
     def parse_external_decl() -> list[AST.ExternalDecl]:
         start_pos = pos
         specs = parse_decl_specs()
@@ -200,13 +205,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             expect(TokenKind.RPAREN)
             return AST.While(cond, parse_stmt(), span=span_from(start_pos))
         if match(TokenKind.KW_DO):
-            body = parse_stmt()
-            expect(TokenKind.KW_WHILE)
-            expect(TokenKind.LPAREN)
-            cond = parse_expr()
-            expect(TokenKind.RPAREN)
-            expect(TokenKind.SEMI)
-            return AST.DoWhile(body, cond, span=span_from(start_pos))
+            return parse_do_while(start_pos)
         if match(TokenKind.KW_FOR):
             return parse_for(start_pos)
         if match(TokenKind.KW_BREAK):
@@ -243,6 +242,18 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         body = AST.Block(body_items, scope=AST.Scope(), span=body_span)
         return AST.Case(value, body, span=span_from(start_pos))
 
+    def parse_do_while(start_pos: int) -> AST.While:
+        body = parse_stmt()
+        expect(TokenKind.KW_WHILE)
+        expect(TokenKind.LPAREN)
+        cond = parse_expr()
+        expect(TokenKind.RPAREN)
+        expect(TokenKind.SEMI)
+        loop_body = ensure_block(body)
+        tail = AST.If(AST.Unary("!", cond, span=cond.span), AST.Break(), None)
+        wrapped_body = AST.Block(loop_body.items + [tail], scope=AST.Scope(), span=loop_body.span)
+        return AST.While(AST.BoolLiteral(True), wrapped_body, span=span_from(start_pos))
+
     def parse_default() -> AST.Default:
         start_pos = pos
         expect(TokenKind.KW_DEFAULT)
@@ -261,28 +272,40 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 items.append(parse_stmt())
         return items, span_from(start_pos) if items else None
 
-    def parse_for(start_pos: int) -> AST.For:
+    def parse_for(start_pos: int) -> AST.Stmt:
         expect(TokenKind.LPAREN)
         if match(TokenKind.SEMI):
-            init = None
+            init_items: list[AST.Stmt] = []
         elif is_decl_start(peek()):
-            decls = parse_declaration()
-            init = decls[0] if len(decls) == 1 else AST.Block(decls, scope=AST.Scope(), span=decls[0].span)
+            init_items = parse_declaration()
         else:
             init_start_pos = pos
             init_expr = parse_expr()
             expect(TokenKind.SEMI)
-            init = AST.ExprStmt(init_expr, span=span_from(init_start_pos))
+            init_items = [AST.ExprStmt(init_expr, span=span_from(init_start_pos))]
 
         if match(TokenKind.SEMI):
-            cond = None
+            cond = AST.BoolLiteral(True)
         else:
             cond = parse_expr()
             expect(TokenKind.SEMI)
 
+        step_start_pos = pos
         step = None if at(TokenKind.RPAREN) else parse_expr()
         expect(TokenKind.RPAREN)
-        return AST.For(init, cond, step, parse_stmt(), scope=AST.Scope(), span=span_from(start_pos))
+        loop_body = parse_stmt()
+
+        normalized_body = ensure_block(loop_body)
+        if step is not None:
+            normalized_body = AST.Block(
+                normalized_body.items + [AST.ExprStmt(step, span=span_from(step_start_pos))],
+                scope=AST.Scope(),
+                span=normalized_body.span,
+            )
+        loop = AST.While(cond, normalized_body, span=span_from(start_pos))
+        if init_items:
+            return AST.Block(init_items + [loop], scope=AST.Scope(), span=span_from(start_pos))
+        return loop
 
     def parse_declaration() -> list[AST.Stmt]:
         start_pos = pos

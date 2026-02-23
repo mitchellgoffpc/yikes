@@ -24,9 +24,6 @@ def _program(items: list[AST.ExternalDecl]) -> AST.Program:
 def _block(items: list[AST.Stmt]) -> AST.Block:
     return AST.Block(items, scope=AST.Scope())
 
-def _for(init: AST.Stmt | None, cond: AST.Expr | None, step: AST.Expr | None, body: AST.Stmt) -> AST.For:
-    return AST.For(init, cond, step, body, scope=AST.Scope())
-
 def _ptr(qualifiers: list[AST.TypeQualifier] | None = None, to: AST.Pointer | None = None) -> AST.Pointer:
     return AST.Pointer(qualifiers or [], to)
 
@@ -225,22 +222,37 @@ def test_statements(subtests: pytest.Subtests) -> None:
         ("if (x) y; else z;",
          AST.If(AST.Identifier("x"), AST.ExprStmt(AST.Identifier("y")), AST.ExprStmt(AST.Identifier("z")))),
         ("while (x) y;", AST.While(AST.Identifier("x"), AST.ExprStmt(AST.Identifier("y")))),
-        ("do x; while (y);", AST.DoWhile(AST.ExprStmt(AST.Identifier("x")), AST.Identifier("y"))),
-        ("for (;;) x;", _for(None, None, None, AST.ExprStmt(AST.Identifier("x")))),
+        ("do x; while (y);",
+         AST.While(
+             AST.BoolLiteral(True),
+             _block([
+                 AST.ExprStmt(AST.Identifier("x")),
+                 AST.If(AST.Unary("!", AST.Identifier("y")), AST.Break(), None),
+             ]),
+         )),
+        ("for (;;) x;", AST.While(AST.BoolLiteral(True), _block([AST.ExprStmt(AST.Identifier("x"))]))),
         ("for (i = 0; i < 3; i++) x;",
-         _for(
+         _block([
              AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.IntLiteral(0))),
-             AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
-             AST.IncDec("++", AST.Identifier("i"), True),
-             AST.ExprStmt(AST.Identifier("x")),
-         )),
+             AST.While(
+                 AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
+                 _block([
+                     AST.ExprStmt(AST.Identifier("x")),
+                     AST.ExprStmt(AST.IncDec("++", AST.Identifier("i"), True)),
+                 ]),
+             ),
+         ])),
         ("for (int i = 0; i < 3; i = i + 1) x;",
-         _for(
+         _block([
              AST.VarDecl(_id("i"), _bt("int"), AST.IntLiteral(0)),
-             AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
-             AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1))),
-             AST.ExprStmt(AST.Identifier("x")),
-         )),
+             AST.While(
+                 AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
+                 _block([
+                     AST.ExprStmt(AST.Identifier("x")),
+                     AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1)))),
+                 ]),
+             ),
+         ])),
         ("break;", AST.Break()),
         ("continue;", AST.Continue()),
         ("switch (x) { case 1: y; default: z; }",

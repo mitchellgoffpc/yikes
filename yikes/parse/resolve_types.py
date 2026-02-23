@@ -42,13 +42,8 @@ def _resolve_stmt(node: AST.Stmt, scopes: list[AST.Scope]) -> None:
             _resolve_stmt(node.then, scopes)
             if node.otherwise:
                 _resolve_stmt(node.otherwise, scopes)
-        case AST.While(body=stmt) | AST.DoWhile(body=stmt) | AST.Label(stmt=stmt):
+        case AST.While(body=stmt) | AST.Label(stmt=stmt):
             _resolve_stmt(stmt, scopes)
-        case AST.For():
-            scopes = [*scopes, node.scope]
-            if node.init:
-                _resolve_stmt(node.init, scopes)
-            _resolve_stmt(node.body, scopes)
         case AST.Switch() | AST.Case() | AST.Default():
             _resolve_block(node.body, scopes)
         case _:

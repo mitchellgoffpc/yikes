@@ -55,13 +55,6 @@ def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None
                 _bind_stmt(node.otherwise, scope, label_scope)
         case AST.While():
             _bind_stmt(node.body, scope, label_scope)
-        case AST.DoWhile():
-            _bind_stmt(node.body, scope, label_scope)
-        case AST.For():
-            for_scope = node.scope
-            if node.init:
-                _bind_stmt(node.init, for_scope, label_scope)
-            _bind_stmt(node.body, for_scope, label_scope)
         case AST.Switch():
             _bind_block(node.body, scope, label_scope)
         case AST.Case():
@@ -78,9 +71,6 @@ def _bind_block(block: AST.Block, scope: AST.Scope, label_scope: AST.Scope, *, u
     block_scope = scope if use_existing else block.scope
     for item in block.items:
         _bind_stmt(item, block_scope, label_scope)
-
-def _bind_decl_specs(specs: AST.DeclSpecs, scope: AST.Scope, owner: AST.SymbolDecl) -> None:
-    _bind_ctype_defs(specs.ctype, scope, owner)
 
 def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
     for param in params:
@@ -134,14 +124,3 @@ def _add_tag(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType, decl: AST
 def _add_label(scope: AST.Scope, name: AST.Identifier, decl: AST.Label) -> None:
     if name.name not in scope.labels:
         scope.labels[name.name] = AST.Symbol(name.name, AST.SymbolKind.LABEL, None, decl)
-
-def _declarator_name(decl: AST.Declarator) -> AST.Identifier:
-    direct = decl.direct
-    while direct is not None:
-        if direct.name is not None:
-            return direct.name
-        if direct.nested is None:
-            break
-        decl = direct.nested
-        direct = decl.direct
-    raise ValueError("Expected declarator name")

@@ -167,19 +167,6 @@ class While(NamedTuple):
     body: Stmt
     span: Span | None = None
 
-class DoWhile(NamedTuple):
-    body: Stmt
-    cond: Expr
-    span: Span | None = None
-
-class For(NamedTuple):
-    init: Stmt | None
-    cond: Expr | None
-    step: Expr | None
-    body: Stmt
-    scope: Scope
-    span: Span | None = None
-
 class Break(NamedTuple):
     span: Span | None = None
 
@@ -368,7 +355,7 @@ CType = BuiltinType | PointerType | ArrayType | FunctionType | StructType | Unio
 DeclSpec = StorageClassSpec | TypeQualifier | FunctionSpec
 ExternalDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef
 Stmt = (
-    Block | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | ExprStmt | Return | If | While | DoWhile | For | Break
+    Block | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | ExprStmt | Return | If | While | Break
     | Continue | Switch | Case | Default | Label | Goto
 )
 SymbolDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Enumerator | Label | Param

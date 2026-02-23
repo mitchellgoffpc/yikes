@@ -54,10 +54,6 @@ def _normalize_stmt(node: AST.Stmt) -> AST.Stmt:
             return AST.If(_normalize_expr(node.cond), then, otherwise)
         case AST.While():
             return AST.While(_normalize_expr(node.cond), _ensure_block(_normalize_stmt(node.body)))
-        case AST.DoWhile():
-            return _normalize_do_while(node)
-        case AST.For():
-            return _normalize_for(node)
         case AST.Break() | AST.Continue():
             return node
         case AST.Switch():
@@ -114,26 +110,6 @@ def _normalize_block(block: AST.Block) -> AST.Block:
     for item in block.items:
         items.extend(_normalize_stmt_items(item))
     return AST.Block(items, scope=AST.Scope())
-
-def _normalize_for(node: AST.For) -> AST.Stmt:
-    init_items = _normalize_stmt_items(node.init) if node.init else []
-    if len(init_items) == 1 and isinstance(init_items[0], AST.Block):
-        init_items = init_items[0].items
-    cond = _normalize_expr(node.cond) if node.cond else AST.BoolLiteral(True)
-    step = _normalize_expr(node.step) if node.step else None
-    body = _ensure_block(_normalize_stmt(node.body))
-    if step:
-        body = AST.Block(body.items + [AST.ExprStmt(step)], scope=AST.Scope())
-    loop = AST.While(cond, body)
-    if init_items:
-        return AST.Block(init_items + [loop], scope=AST.Scope())
-    return loop
-
-def _normalize_do_while(node: AST.DoWhile) -> AST.Stmt:
-    body = _ensure_block(_normalize_stmt(node.body))
-    cond = _normalize_expr(node.cond)
-    tail = AST.If(AST.Unary("!", cond), AST.Break(), None)
-    return AST.While(AST.BoolLiteral(True), AST.Block(body.items + [tail], scope=AST.Scope()))
 
 def _normalize_fields(fields: list[AST.Field] | None) -> list[AST.Field] | None:
     if fields is None:

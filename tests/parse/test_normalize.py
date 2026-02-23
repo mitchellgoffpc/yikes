@@ -13,20 +13,8 @@ def _bt(name: str) -> AST.BuiltinType:
 def _id(name: str) -> AST.Identifier:
     return AST.Identifier(name)
 
-def _specs(ctype: AST.CType, *specs: AST.DeclSpec) -> AST.DeclSpecs:
-    return AST.DeclSpecs(list(specs), ctype)
-
 def _block(items: list[AST.Stmt]) -> AST.Block:
     return AST.Block(items, scope=AST.Scope())
-
-def _decl(name: str, *, suffixes: list[AST.DirectSuffix] | None = None) -> AST.Declarator:
-    return AST.Declarator(None, AST.DirectDeclarator(_id(name), None, suffixes or []))
-
-def _init(name: str, init: AST.Initializer | None = None, *, suffixes: list[AST.DirectSuffix] | None = None) -> AST.InitDeclarator:
-    return AST.InitDeclarator(_decl(name, suffixes=suffixes), init)
-
-def _array_suffix(size: AST.Expr | None) -> AST.DirectSuffix:
-    return AST.DirectSuffix(None, size, False, False)
 
 def _stmt(source: str) -> AST.Stmt:
     program = normalize(parse(f"int main() {{ {source} }}", with_spans=False))
@@ -93,7 +81,7 @@ def test_normalize_do_while(subtests: pytest.Subtests) -> None:
              AST.BoolLiteral(True),
              _block([
                  AST.ExprStmt(AST.Identifier("x")),
-                 AST.If(AST.Unary("!", AST.Identifier("y")), AST.Break(), None),
+                 AST.If(AST.Unary("!", AST.Identifier("y")), _block([AST.Break()]), None),
              ]),
          )),
         ("do { x; y; } while (cond);",
@@ -102,7 +90,7 @@ def test_normalize_do_while(subtests: pytest.Subtests) -> None:
              _block([
                  AST.ExprStmt(AST.Identifier("x")),
                  AST.ExprStmt(AST.Identifier("y")),
-                 AST.If(AST.Unary("!", AST.Identifier("cond")), AST.Break(), None),
+                 AST.If(AST.Unary("!", AST.Identifier("cond")), _block([AST.Break()]), None),
              ]),
          )),
     ]

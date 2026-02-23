@@ -40,7 +40,7 @@ def test_function_and_block_scopes(subtests: pytest.Subtests) -> None:
         ("int f(int a, int b) { int c; { int d; } }",
          {"body": {"a": AST.SymbolKind.VAR, "b": AST.SymbolKind.VAR, "c": AST.SymbolKind.VAR}, "inner": {"d": AST.SymbolKind.VAR}}),
         ("int f() { for (int i = 0; i < 3; i++) { int j; } }",
-         {"body": {}, "for": {"i": AST.SymbolKind.VAR}, "inner": {"j": AST.SymbolKind.VAR}}),
+         {"body": {}, "for_block": {"i": AST.SymbolKind.VAR}, "inner": {"j": AST.SymbolKind.VAR}}),
         ("int f() { label: goto label; }",
          {"labels": {"label": AST.SymbolKind.LABEL}}),
     ]
@@ -56,11 +56,13 @@ def test_function_and_block_scopes(subtests: pytest.Subtests) -> None:
                 continue
 
             assert _idents(item.body.scope) == expected["body"]
-            if "for" in expected:
-                for_stmt = item.body.items[0]
-                assert isinstance(for_stmt, AST.For)
-                assert _idents(for_stmt.scope) == expected["for"]
-                body = for_stmt.body
+            if "for_block" in expected:
+                loop_block = item.body.items[0]
+                assert isinstance(loop_block, AST.Block)
+                assert _idents(loop_block.scope) == expected["for_block"]
+                while_stmt = loop_block.items[1]
+                assert isinstance(while_stmt, AST.While)
+                body = while_stmt.body
                 assert isinstance(body, AST.Block)
                 assert _idents(body.scope) == expected["inner"]
             else:
