@@ -15,6 +15,9 @@ def _id(name: str) -> AST.Identifier:
 def _specs(ctype: AST.CType, *specs: AST.DeclSpec) -> AST.DeclSpecs:
     return AST.DeclSpecs(list(specs), ctype)
 
+def _fn(ret: AST.CType, params: list[AST.Param], variadic: bool = False) -> AST.FunctionType:
+    return AST.FunctionType(ret, params, variadic)
+
 def _span(start_line: int, start_col: int, end_line: int, end_col: int) -> AST.Span:
     return AST.Span(AST.Position(start_line, start_col), AST.Position(end_line, end_col))
 
@@ -44,19 +47,19 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
     cases = [
         ("struct S { int :1; int a:2; int b; };",
          _program([
-             AST.StructDef(_id("S"), [], [
+             AST.StructDef(_id("S"), [], AST.StructType(_id("S"), [
                 AST.Field(None, _bt("int"), AST.IntLiteral(1)),
                 AST.Field(_id("a"), _bt("int"), AST.IntLiteral(2)),
                 AST.Field(_id("b"), _bt("int"), None),
-            ]),
+            ])),
         ])),
         ("union U { int x; char y; };",
          _program([
-             AST.UnionDef(_id("U"), [], [AST.Field(_id("x"), _bt("int"), None), AST.Field(_id("y"), _bt("char"), None)]),
+             AST.UnionDef(_id("U"), [], AST.UnionType(_id("U"), [AST.Field(_id("x"), _bt("int"), None), AST.Field(_id("y"), _bt("char"), None)])),
          ])),
         ("enum E { A, B = 3 };",
          _program([
-             AST.EnumDef(_id("E"), [], [AST.Enumerator(_id("A"), None), AST.Enumerator(_id("B"), AST.IntLiteral(3))]),
+             AST.EnumDef(_id("E"), [], AST.EnumType(_id("E"), [AST.Enumerator(_id("A"), None), AST.Enumerator(_id("B"), AST.IntLiteral(3))])),
          ])),
         ("typedef int T; T x;",
          _program([
@@ -90,9 +93,7 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              AST.FunctionDef(
                  _id("add"),
                  _specs(_bt("int")),
-                 [AST.Param(_id("x"), _bt("int")), AST.Param(_id("y"), _bt("int"))],
-                 _bt("int"),
-                 False,
+                 _fn(_bt("int"), [AST.Param(_id("x"), _bt("int")), AST.Param(_id("y"), _bt("int"))], False),
                  _block([AST.Return(AST.Binary("+", AST.Identifier("x"), AST.Identifier("y")))]),
                  scope=AST.Scope(),
              ),
@@ -102,9 +103,7 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              AST.FunctionDef(
                  _id("logf"),
                  _specs(_bt("int")),
-                 [AST.Param(_id("level"), _bt("int"))],
-                 _bt("int"),
-                 True,
+                 _fn(_bt("int"), [AST.Param(_id("level"), _bt("int"))], True),
                  _block([AST.Return(AST.Identifier("level"))]),
                  scope=AST.Scope(),
              ),
@@ -114,9 +113,7 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              AST.FunctionDef(
                  _id("f"),
                  _specs(_bt("int")),
-                 [],
-                 AST.PointerType(AST.FunctionType(_bt("int"), [AST.Param(None, _bt("int"))], False)),
-                 False,
+                 _fn(AST.PointerType(AST.FunctionType(_bt("int"), [AST.Param(None, _bt("int"))], False)), [], False),
                  _block([AST.Return(AST.IntLiteral(0))]),
                  scope=AST.Scope(),
              ),
@@ -126,9 +123,7 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              AST.FunctionDef(
                  _id("ptr"),
                  _specs(_bt("int"), AST.StorageClassSpec("static"), AST.FunctionSpec("inline")),
-                 [],
-                 AST.PointerType(_bt("int")),
-                 False,
+                 _fn(AST.PointerType(_bt("int")), [], False),
                  _block([AST.Return(AST.IntLiteral(0))]),
                  scope=AST.Scope(),
              ),
@@ -343,9 +338,12 @@ def test_spans(subtests: pytest.Subtests) -> None:
         AST.FunctionDef(
             AST.Identifier("main", _span(1, 5, 1, 9)),
             AST.DeclSpecs([], AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)), _span(1, 1, 1, 4)),
-            [],
-            AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)),
-            False,
+            AST.FunctionType(
+                AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)),
+                [],
+                False,
+                _span(1, 9, 1, 4),
+            ),
             AST.Block([AST.Return(AST.IntLiteral(42, _span(2, 10, 2, 12)), _span(2, 3, 2, 13))], scope=AST.Scope(), span=_span(1, 12, 3, 2)),
             scope=AST.Scope(),
             span=_span(1, 1, 3, 2),

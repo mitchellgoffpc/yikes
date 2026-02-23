@@ -15,12 +15,8 @@ def _resolve_external_decl(node: AST.ExternalDecl, scopes: list[AST.Scope]) -> N
             _resolve_function_def(node, scopes)
         case AST.VarDecl() | AST.TypeDef():
             _set_symbol_ctype(scopes[-1], node.name, _resolve_ctype(node.ctype, scopes))
-        case AST.StructDef():
-            _resolve_tag_def(AST.StructType(node.name, node.fields), scopes)
-        case AST.UnionDef():
-            _resolve_tag_def(AST.UnionType(node.name, node.fields), scopes)
-        case AST.EnumDef():
-            _resolve_tag_def(AST.EnumType(node.name, node.values), scopes)
+        case AST.StructDef() | AST.UnionDef() | AST.EnumDef():
+            _resolve_tag_def(node.ctype, scopes)
         case _:
             raise TypeError(f"Unknown external decl: {type(node).__name__}")
 
@@ -30,12 +26,8 @@ def _resolve_stmt(node: AST.Stmt, scopes: list[AST.Scope]) -> None:
             _resolve_block(node, scopes)
         case AST.VarDecl() | AST.TypeDef():
             _set_symbol_ctype(scopes[-1], node.name, _resolve_ctype(node.ctype, scopes))
-        case AST.StructDef():
-            _resolve_tag_def(AST.StructType(node.name, node.fields), scopes)
-        case AST.UnionDef():
-            _resolve_tag_def(AST.UnionType(node.name, node.fields), scopes)
-        case AST.EnumDef():
-            _resolve_tag_def(AST.EnumType(node.name, node.values), scopes)
+        case AST.StructDef() | AST.UnionDef() | AST.EnumDef():
+            _resolve_tag_def(node.ctype, scopes)
         case AST.ExprStmt() | AST.Return() | AST.Break() | AST.Continue() | AST.Goto():
             return
         case AST.If():
@@ -55,11 +47,11 @@ def _resolve_block(block: AST.Block, scopes: list[AST.Scope]) -> None:
         _resolve_stmt(item, block_scopes)
 
 def _resolve_function_def(node: AST.FunctionDef, scopes: list[AST.Scope]) -> None:
-    return_type = _resolve_ctype(node.return_type, scopes)
-    params = [_resolve_param(param, scopes) for param in node.params]
-    _set_symbol_ctype(scopes[-1], node.name, AST.FunctionType(return_type, params, node.variadic))
+    resolved_ctype = _resolve_ctype(node.ctype, scopes)
+    assert isinstance(resolved_ctype, AST.FunctionType)
+    _set_symbol_ctype(scopes[-1], node.name, resolved_ctype)
     function_scopes = [*scopes, node.body.scope]
-    for param in params:
+    for param in resolved_ctype.params:
         if param.name is not None:
             _set_symbol_ctype(function_scopes[-1], param.name, param.ctype)
     for item in node.body.items:

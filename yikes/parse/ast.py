@@ -86,9 +86,7 @@ class Program(NamedTuple):
 class FunctionDef(NamedTuple):
     name: Identifier
     specs: DeclSpecs
-    params: list[Param]
-    return_type: CType
-    variadic: bool
+    ctype: FunctionType
     body: Block
     scope: Scope
     span: Span | None = None
@@ -128,13 +126,13 @@ class Field(NamedTuple):
 class StructDef(NamedTuple):
     name: Identifier | None
     specs: list[DeclSpec]
-    fields: list[Field] | None
+    ctype: StructType
     span: Span | None = None
 
 class UnionDef(NamedTuple):
     name: Identifier | None
     specs: list[DeclSpec]
-    fields: list[Field] | None
+    ctype: UnionType
     span: Span | None = None
 
 class Enumerator(NamedTuple):
@@ -145,7 +143,7 @@ class Enumerator(NamedTuple):
 class EnumDef(NamedTuple):
     name: Identifier | None
     specs: list[DeclSpec]
-    values: list[Enumerator]
+    ctype: EnumType
     span: Span | None = None
 
 class Pointer(NamedTuple):

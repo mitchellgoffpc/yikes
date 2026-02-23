@@ -11,24 +11,23 @@ def bind(program: AST.Program) -> AST.Program:
 def _bind_external_decl(node: AST.ExternalDecl, scope: AST.Scope) -> None:
     match node:
         case AST.FunctionDef():
-            _add_ident(scope, node.name, AST.SymbolKind.FUNC, None, node)
-            _bind_params(node.params, node.body.scope)
+            _add_ident(scope, AST.SymbolKind.FUNC, None, node)
+            _bind_params(node.ctype.params, node.body.scope)
             _bind_block(node.body, node.body.scope, node.scope, use_existing=True)
         case AST.VarDecl():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.VAR, None, node)
+            _add_ident(scope, AST.SymbolKind.VAR, None, node)
         case AST.TypeDef():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.TYPEDEF, None, node)
+            _add_ident(scope, AST.SymbolKind.TYPEDEF, None, node)
         case AST.StructDef():
-            _bind_tag_def(scope, AST.StructType(node.name, node.fields), node)
+            _add_tag(scope, node.ctype, node)
         case AST.UnionDef():
-            _bind_tag_def(scope, AST.UnionType(node.name, node.fields), node)
+            _add_tag(scope, node.ctype, node)
         case AST.EnumDef():
-            _bind_tag_def(scope, AST.EnumType(node.name, node.values), node)
-            _bind_enumerators(scope, node.values)
-        case _:
-            raise TypeError(f"Unknown external decl: {type(node).__name__}")
+            _add_tag(scope, node.ctype, node)
+            if node.ctype.values is not None:
+                _bind_enumerators(scope, node.ctype.values)
 
 def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None:
     match node:
@@ -36,17 +35,18 @@ def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None
             _bind_block(node, scope, label_scope)
         case AST.VarDecl():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.VAR, None, node)
+            _add_ident(scope, AST.SymbolKind.VAR, None, node)
         case AST.TypeDef():
             _bind_ctype_defs(node.ctype, scope, node)
-            _add_ident(scope, node.name, AST.SymbolKind.TYPEDEF, None, node)
+            _add_ident(scope, AST.SymbolKind.TYPEDEF, None, node)
         case AST.StructDef():
-            _bind_tag_def(scope, AST.StructType(node.name, node.fields), node)
+            _add_tag(scope, node.ctype, node)
         case AST.UnionDef():
-            _bind_tag_def(scope, AST.UnionType(node.name, node.fields), node)
+            _add_tag(scope, node.ctype, node)
         case AST.EnumDef():
-            _bind_tag_def(scope, AST.EnumType(node.name, node.values), node)
-            _bind_enumerators(scope, node.values)
+            _add_tag(scope, node.ctype, node)
+            if node.ctype.values is not None:
+                _bind_enumerators(scope, node.ctype.values)
         case AST.ExprStmt() | AST.Return() | AST.Break() | AST.Continue() | AST.Goto():
             return
         case AST.If():
@@ -62,10 +62,8 @@ def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None
         case AST.Default():
             _bind_block(node.body, scope, label_scope)
         case AST.Label():
-            _add_label(label_scope, node.name, node)
+            _add_label(label_scope, node)
             _bind_stmt(node.stmt, scope, label_scope)
-        case _:
-            raise TypeError(f"Unknown stmt: {type(node).__name__}")
 
 def _bind_block(block: AST.Block, scope: AST.Scope, label_scope: AST.Scope, *, use_existing: bool = False) -> None:
     block_scope = scope if use_existing else block.scope
@@ -75,7 +73,7 @@ def _bind_block(block: AST.Block, scope: AST.Scope, label_scope: AST.Scope, *, u
 def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
     for param in params:
         if param.name is not None:
-            _add_ident(scope, param.name, AST.SymbolKind.VAR, None, param)
+            _add_ident(scope, AST.SymbolKind.VAR, None, param)
         _bind_ctype_defs(param.ctype, scope, None)
 
 def _bind_ctype_defs(ctype: AST.CType, scope: AST.Scope, owner: AST.SymbolDecl | None) -> None:
@@ -86,41 +84,31 @@ def _bind_ctype_defs(ctype: AST.CType, scope: AST.Scope, owner: AST.SymbolDecl |
             _bind_ctype_defs(ctype.base, scope, owner)
         case AST.FunctionType():
             _bind_ctype_defs(ctype.return_type, scope, owner)
-            _bind_param_type_defs(ctype.params, scope, owner)
-        case AST.StructType() | AST.UnionType() | AST.EnumType():
-            _bind_tag_def(scope, ctype, owner)
-            if isinstance(ctype, AST.EnumType) and ctype.values is not None:
-                _bind_enumerators(scope, ctype.values)
+            for param in ctype.params:
+                _bind_ctype_defs(param.ctype, scope, owner)
+        case AST.StructType():
+            _add_tag(scope, ctype, owner)
+        case AST.UnionType():
+            _add_tag(scope, ctype, owner)
+        case AST.EnumType(values=values):
+            _add_tag(scope, ctype, owner)
+            if values is not None:
+                _bind_enumerators(scope, values)
         case AST.BuiltinType() | AST.NamedType():
             return
-        case _:
-            raise TypeError(f"Unknown ctype: {type(ctype).__name__}")
-
-def _bind_tag_def(scope: AST.Scope, ctype: AST.StructType | AST.UnionType | AST.EnumType, owner: AST.SymbolDecl | None) -> None:
-    match ctype:
-        case AST.StructType(name=name, fields=fields) if name is not None and fields is not None:
-            _add_tag(scope, name, ctype, owner)
-        case AST.UnionType(name=name, fields=fields) if name is not None and fields is not None:
-            _add_tag(scope, name, ctype, owner)
-        case AST.EnumType(name=name, values=values) if name is not None and values is not None:
-            _add_tag(scope, name, ctype, owner)
 
 def _bind_enumerators(scope: AST.Scope, values: list[AST.Enumerator]) -> None:
     for value in values:
-        _add_ident(scope, value.name, AST.SymbolKind.ENUM_CONST, None, value)
+        _add_ident(scope, AST.SymbolKind.ENUM_CONST, None, value)
 
-def _bind_param_type_defs(params: list[AST.Param], scope: AST.Scope, owner: AST.SymbolDecl | None) -> None:
-    for param in params:
-        _bind_ctype_defs(param.ctype, scope, owner)
+def _add_ident(scope: AST.Scope, kind: AST.SymbolKind, ctype: AST.CType | None, decl: AST.SymbolDecl) -> None:
+    if decl.name and decl.name.name not in scope.idents:
+        scope.idents[decl.name.name] = AST.Symbol(decl.name.name, kind, ctype, decl)
 
-def _add_ident(scope: AST.Scope, name: AST.Identifier, kind: AST.SymbolKind, ctype: AST.CType | None, decl: AST.SymbolDecl | None) -> None:
-    if name.name and name.name not in scope.idents:
-        scope.idents[name.name] = AST.Symbol(name.name, kind, ctype, decl)
+def _add_tag(scope: AST.Scope, ctype: AST.StructType | AST.UnionType | AST.EnumType, decl: AST.SymbolDecl | None) -> None:
+    if ctype.name and ctype.name.name not in scope.tags:
+        scope.tags[ctype.name.name] = AST.Symbol(ctype.name.name, AST.SymbolKind.TAG, ctype, decl)
 
-def _add_tag(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType, decl: AST.SymbolDecl | None) -> None:
-    if name.name not in scope.tags:
-        scope.tags[name.name] = AST.Symbol(name.name, AST.SymbolKind.TAG, ctype, decl)
-
-def _add_label(scope: AST.Scope, name: AST.Identifier, decl: AST.Label) -> None:
-    if name.name not in scope.labels:
-        scope.labels[name.name] = AST.Symbol(name.name, AST.SymbolKind.LABEL, None, decl)
+def _add_label(scope: AST.Scope, decl: AST.Label) -> None:
+    if decl.name.name not in scope.labels:
+        scope.labels[decl.name.name] = AST.Symbol(decl.name.name, AST.SymbolKind.LABEL, None, decl)
