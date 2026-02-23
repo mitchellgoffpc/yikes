@@ -21,8 +21,6 @@ def _resolve_external_decl(node: AST.ExternalDecl, scopes: list[AST.Scope]) -> N
             _resolve_tag_def(AST.UnionType(node.name, node.fields), scopes)
         case AST.EnumDef():
             _resolve_tag_def(AST.EnumType(node.name, node.values), scopes)
-        case AST.Declaration():
-            _resolve_declaration(node, scopes)
         case _:
             raise TypeError(f"Unknown external decl: {type(node).__name__}")
 
@@ -38,8 +36,6 @@ def _resolve_stmt(node: AST.Stmt, scopes: list[AST.Scope]) -> None:
             _resolve_tag_def(AST.UnionType(node.name, node.fields), scopes)
         case AST.EnumDef():
             _resolve_tag_def(AST.EnumType(node.name, node.values), scopes)
-        case AST.Declaration():
-            _resolve_declaration(node, scopes)
         case AST.ExprStmt() | AST.Return() | AST.Break() | AST.Continue() | AST.Goto():
             return
         case AST.If():
@@ -76,12 +72,6 @@ def _resolve_function_def(node: AST.FunctionDef, scopes: list[AST.Scope]) -> Non
 
 def _resolve_param(param: AST.Param, scopes: list[AST.Scope]) -> AST.Param:
     return AST.Param(param.name, _resolve_ctype(param.ctype, scopes))
-
-def _resolve_declaration(node: AST.Declaration, scopes: list[AST.Scope]) -> None:
-    for declarator in node.declarators:
-        name = _declarator_name(declarator.declarator)
-        ctype = _build_type(node.specs, declarator.declarator, scopes)
-        _set_symbol_ctype(scopes[-1], name, ctype)
 
 def _resolve_tag_def(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> None:
     match ctype:

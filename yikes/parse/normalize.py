@@ -27,8 +27,6 @@ def _normalize_external_decl(node: AST.ExternalDecl) -> list[AST.ExternalDecl]:
             return [AST.UnionDef(node.name, node.specs, _normalize_fields(node.fields))]
         case AST.EnumDef():
             return [AST.EnumDef(node.name, node.specs, [_normalize_enumerator(value) for value in node.values])]
-        case AST.Declaration():
-            return cast(list[AST.ExternalDecl], _normalize_declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators]))
         case _:
             raise TypeError(f"Unknown external decl: {type(node).__name__}")
 
@@ -46,8 +44,6 @@ def _normalize_stmt(node: AST.Stmt) -> AST.Stmt:
             return AST.UnionDef(node.name, node.specs, _normalize_fields(node.fields))
         case AST.EnumDef():
             return AST.EnumDef(node.name, node.specs, [_normalize_enumerator(value) for value in node.values])
-        case AST.Declaration():
-            return AST.Declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators])
         case AST.ExprStmt():
             return AST.ExprStmt(_normalize_expr(node.expr) if node.expr else None)
         case AST.Return():
@@ -79,8 +75,6 @@ def _normalize_stmt(node: AST.Stmt) -> AST.Stmt:
 
 def _normalize_stmt_items(node: AST.Stmt) -> list[AST.Stmt]:
     match node:
-        case AST.Declaration():
-            return cast(list[AST.Stmt], _normalize_declaration(node.specs, [_normalize_init_declarator(decl) for decl in node.declarators]))
         case _:
             return [_normalize_stmt(node)]
 
@@ -123,6 +117,8 @@ def _normalize_block(block: AST.Block) -> AST.Block:
 
 def _normalize_for(node: AST.For) -> AST.Stmt:
     init_items = _normalize_stmt_items(node.init) if node.init else []
+    if len(init_items) == 1 and isinstance(init_items[0], AST.Block):
+        init_items = init_items[0].items
     cond = _normalize_expr(node.cond) if node.cond else AST.BoolLiteral(True)
     step = _normalize_expr(node.step) if node.step else None
     body = _ensure_block(_normalize_stmt(node.body))
@@ -169,8 +165,3 @@ def _ensure_block(stmt: AST.Stmt) -> AST.Block:
     if isinstance(stmt, AST.Block):
         return stmt
     return AST.Block([stmt], scope=AST.Scope())
-
-def _normalize_declaration(specs: AST.DeclSpecs, declarators: list[AST.InitDeclarator]) -> list[AST.Declaration]:
-    if len(declarators) <= 1:
-        return [AST.Declaration(specs, declarators)]
-    return [AST.Declaration(specs, [declarator]) for declarator in declarators]

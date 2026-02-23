@@ -69,8 +69,8 @@ def test_normalize_for_loops(subtests: pytest.Subtests) -> None:
          ])),
         ("for (int i = 0, j = 1; i < 3; i = i + 1) x;",
          _block([
-            AST.Declaration(_specs(_bt("int")), [_init("i", AST.IntLiteral(0))]),
-            AST.Declaration(_specs(_bt("int")), [_init("j", AST.IntLiteral(1))]),
+            AST.VarDecl(_id("i"), _bt("int"), AST.IntLiteral(0)),
+            AST.VarDecl(_id("j"), _bt("int"), AST.IntLiteral(1)),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
                  _block([
@@ -116,13 +116,13 @@ def test_normalize_declaration_lists(subtests: pytest.Subtests) -> None:
     cases = [
         ("int a, b;",
          [
-            AST.Declaration(_specs(_bt("int")), [_init("a")]),
-            AST.Declaration(_specs(_bt("int")), [_init("b")]),
+            AST.VarDecl(_id("a"), _bt("int"), None),
+            AST.VarDecl(_id("b"), _bt("int"), None),
          ]),
         ("int a = 1, b = 2;",
          [
-            AST.Declaration(_specs(_bt("int")), [_init("a", AST.IntLiteral(1))]),
-            AST.Declaration(_specs(_bt("int")), [_init("b", AST.IntLiteral(2))]),
+            AST.VarDecl(_id("a"), _bt("int"), AST.IntLiteral(1)),
+            AST.VarDecl(_id("b"), _bt("int"), AST.IntLiteral(2)),
          ]),
     ]
 

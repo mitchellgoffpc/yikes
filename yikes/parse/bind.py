@@ -27,8 +27,6 @@ def _bind_external_decl(node: AST.ExternalDecl, scope: AST.Scope) -> None:
         case AST.EnumDef():
             _bind_tag_def(scope, AST.EnumType(node.name, node.values), node)
             _bind_enumerators(scope, node.values)
-        case AST.Declaration():
-            _bind_declaration(node, scope)
         case _:
             raise TypeError(f"Unknown external decl: {type(node).__name__}")
 
@@ -49,8 +47,6 @@ def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None
         case AST.EnumDef():
             _bind_tag_def(scope, AST.EnumType(node.name, node.values), node)
             _bind_enumerators(scope, node.values)
-        case AST.Declaration():
-            _bind_declaration(node, scope)
         case AST.ExprStmt() | AST.Return() | AST.Break() | AST.Continue() | AST.Goto():
             return
         case AST.If():
@@ -82,14 +78,6 @@ def _bind_block(block: AST.Block, scope: AST.Scope, label_scope: AST.Scope, *, u
     block_scope = scope if use_existing else block.scope
     for item in block.items:
         _bind_stmt(item, block_scope, label_scope)
-
-def _bind_declaration(node: AST.Declaration, scope: AST.Scope) -> None:
-    _bind_decl_specs(node.specs, scope, node)
-    is_typedef = _has_storage(node.specs, "typedef")
-    kind = AST.SymbolKind.TYPEDEF if is_typedef else AST.SymbolKind.VAR
-    for declarator in node.declarators:
-        name = _declarator_name(declarator.declarator)
-        _add_ident(scope, name, kind, None, node)
 
 def _bind_decl_specs(specs: AST.DeclSpecs, scope: AST.Scope, owner: AST.SymbolDecl) -> None:
     _bind_ctype_defs(specs.ctype, scope, owner)
@@ -146,9 +134,6 @@ def _add_tag(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType, decl: AST
 def _add_label(scope: AST.Scope, name: AST.Identifier, decl: AST.Label) -> None:
     if name.name not in scope.labels:
         scope.labels[name.name] = AST.Symbol(name.name, AST.SymbolKind.LABEL, None, decl)
-
-def _has_storage(specs: AST.DeclSpecs, name: str) -> bool:
-    return any(isinstance(spec, AST.StorageClassSpec) and spec.name == name for spec in specs.specs)
 
 def _declarator_name(decl: AST.Declarator) -> AST.Identifier:
     direct = decl.direct

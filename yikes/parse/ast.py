@@ -66,11 +66,6 @@ class DeclSpecs(NamedTuple):
     ctype: CType
     span: Span | None = None
 
-class Declaration(NamedTuple):
-    specs: DeclSpecs
-    declarators: list[InitDeclarator]
-    span: Span | None = None
-
 class Param(NamedTuple):
     name: Identifier | None
     ctype: CType
@@ -371,9 +366,9 @@ Expr = (
 Initializer = Expr | InitList | CompoundLiteral
 CType = BuiltinType | PointerType | ArrayType | FunctionType | StructType | UnionType | EnumType | NamedType
 DeclSpec = StorageClassSpec | TypeQualifier | FunctionSpec
-ExternalDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration
+ExternalDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef
 Stmt = (
-    Block | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Declaration | ExprStmt | Return | If | While | DoWhile
-    | For | Break | Continue | Switch | Case | Default | Label | Goto
+    Block | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | ExprStmt | Return | If | While | DoWhile | For | Break
+    | Continue | Switch | Case | Default | Label | Goto
 )
-SymbolDecl = FunctionDef | VarDecl | TypeDef | Declaration | StructDef | UnionDef | EnumDef | Enumerator | Label | Param
+SymbolDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef | Enumerator | Label | Param

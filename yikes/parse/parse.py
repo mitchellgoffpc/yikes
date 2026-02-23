@@ -31,17 +31,10 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         return AST.Span(AST.Position(start.line, start.col), AST.Position(end.line, end.col + end.length))
 
     def merge_spans(left: AST.Span | None, right: AST.Span | None) -> AST.Span | None:
-        if not with_spans or left is None or right is None:
-            return None
-        return AST.Span(left.start, right.end)
+        return AST.Span(left.start, right.end) if left and right else None
 
     def peek(offset: int = 0) -> Token:
-        i = pos + offset
-        if i < 0:
-            i = 0
-        if i >= len(tokens):
-            return tokens[-1]
-        return tokens[i]
+        return tokens[max(0, min(len(tokens) - 1, pos + offset))]
 
     def at(kind: TokenKind) -> bool:
         return peek().kind == kind
@@ -57,6 +50,12 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
     def match(kind: TokenKind) -> bool:
         if at(kind):
+            advance()
+            return True
+        return False
+
+    def match_any(kinds: set[TokenKind]) -> bool:
+        if at_any(kinds):
             advance()
             return True
         return False
@@ -106,8 +105,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 return False
         return False
 
-    def has_storage(specs: AST.DeclSpecs, name: str) -> bool:
-        return any(isinstance(s, AST.StorageClassSpec) and s.name == name for s in specs.specs)
+    def is_typedef(specs: AST.DeclSpecs) -> bool:
+        return any(isinstance(s, AST.StorageClassSpec) and s.name == "typedef" for s in specs.specs)
 
     def is_void_param(specs: AST.DeclSpecs, decl: AST.Declarator | AST.AbstractDeclarator | None, params: list[AST.ParamDecl]) -> bool:
         if decl is not None or params:
@@ -121,14 +120,17 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         start_pos = pos
         items: list[AST.ExternalDecl] = []
         while not at(TokenKind.EOF):
-            items.append(parse_external_decl())
+            items.extend(parse_external_decl())
         return AST.Program(items, scope=AST.Scope(), span=span_from(start_pos))
 
-    def parse_external_decl() -> AST.ExternalDecl:
+    def parse_external_decl() -> list[AST.ExternalDecl]:
         start_pos = pos
         specs = parse_decl_specs()
         if match(TokenKind.SEMI):
-            return extract_tag_def(specs) or AST.Declaration(specs, [], span=span_from(start_pos))
+            tag = extract_tag_def(specs)
+            if tag:
+                return [tag]
+            error("declaration does not declare anything")
 
         decls = parse_init_declarator_list()
         if at(TokenKind.LBRACE):
@@ -140,22 +142,26 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 error("Function definition requires function type")
             else:
                 body = parse_block()
-                return AST.FunctionDef(name, specs, ctype.params, ctype.return_type, ctype.variadic, body, scope=AST.Scope(), span=span_from(start_pos))
+                return [AST.FunctionDef(name, specs, ctype.params, ctype.return_type, ctype.variadic, body, scope=AST.Scope(), span=span_from(start_pos))]
 
         expect(TokenKind.SEMI)
-        if has_storage(specs, "typedef"):
-            if len(decls) == 1 and decls[0].init is None:
-                name = declarator_name(decls[0].declarator)
-                ctype = build_type(specs, decls[0].declarator)
+        if is_typedef(specs):
+            if any(decl.init is not None for decl in decls):
+                error("typedef may not have an initializer")
+            typedefs: list[AST.ExternalDecl] = []
+            for decl in decls:
+                name = declarator_name(decl.declarator)
+                ctype = build_type(specs, decl.declarator)
                 typedef_names.add(name.name)
-                return AST.TypeDef(name, ctype, span=span_from(start_pos))
-            return AST.Declaration(specs, decls, span=span_from(start_pos))
+                typedefs.append(AST.TypeDef(name, ctype, span=span_from(start_pos)))
+            return typedefs
 
-        if len(decls) == 1:
-            name = declarator_name(decls[0].declarator)
-            ctype = build_type(specs, decls[0].declarator)
-            return AST.VarDecl(name, ctype, decls[0].init, span=span_from(start_pos))
-        return AST.Declaration(specs, decls, span=span_from(start_pos))
+        var_decls: list[AST.ExternalDecl] = []
+        for decl in decls:
+            name = declarator_name(decl.declarator)
+            ctype = build_type(specs, decl.declarator)
+            var_decls.append(AST.VarDecl(name, ctype, decl.init, span=span_from(start_pos)))
+        return var_decls
 
     def parse_block() -> AST.Block:
         start_pos = pos
@@ -167,7 +173,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             elif at(TokenKind.KW_DEFAULT):
                 items.append(parse_default())
             elif is_decl_start(peek()):
-                items.append(parse_declaration())
+                items.extend(parse_declaration())
             else:
                 items.append(parse_stmt())
         expect(TokenKind.RBRACE)
@@ -250,7 +256,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         items: list[AST.Stmt] = []
         while not at_any(stop):
             if is_decl_start(peek()):
-                items.append(parse_declaration())
+                items.extend(parse_declaration())
             else:
                 items.append(parse_stmt())
         return items, span_from(start_pos) if items else None
@@ -260,7 +266,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         if match(TokenKind.SEMI):
             init = None
         elif is_decl_start(peek()):
-            init = parse_declaration()
+            decls = parse_declaration()
+            init = decls[0] if len(decls) == 1 else AST.Block(decls, scope=AST.Scope(), span=decls[0].span)
         else:
             init_start_pos = pos
             init_expr = parse_expr()
@@ -277,59 +284,66 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         expect(TokenKind.RPAREN)
         return AST.For(init, cond, step, parse_stmt(), scope=AST.Scope(), span=span_from(start_pos))
 
-    def parse_declaration() -> AST.Stmt:
+    def parse_declaration() -> list[AST.Stmt]:
         start_pos = pos
         specs = parse_decl_specs()
         if match(TokenKind.SEMI):
-            return extract_tag_def(specs) or AST.Declaration(specs, [], span=span_from(start_pos))
+            tag = extract_tag_def(specs)
+            if tag:
+                return [tag]
+            error("declaration does not declare anything")
         decls = parse_init_declarator_list()
         expect(TokenKind.SEMI)
 
-        if has_storage(specs, "typedef"):
-            if len(decls) == 1 and decls[0].init is None:
-                name = declarator_name(decls[0].declarator)
-                ctype = build_type(specs, decls[0].declarator)
+        if is_typedef(specs):
+            if any(decl.init is not None for decl in decls):
+                error("typedef may not have an initializer")
+            typedefs: list[AST.Stmt] = []
+            for decl in decls:
+                name = declarator_name(decl.declarator)
+                ctype = build_type(specs, decl.declarator)
                 typedef_names.add(name.name)
-                return AST.TypeDef(name, ctype, span=span_from(start_pos))
-            return AST.Declaration(specs, decls, span=span_from(start_pos))
+                typedefs.append(AST.TypeDef(name, ctype, span=span_from(start_pos)))
+            return typedefs
 
-        if len(decls) == 1:
-            name = declarator_name(decls[0].declarator)
-            ctype = build_type(specs, decls[0].declarator)
-            return AST.VarDecl(name, ctype, decls[0].init, span=span_from(start_pos))
-        return AST.Declaration(specs, decls, span=span_from(start_pos))
+        var_decls: list[AST.Stmt] = []
+        for decl in decls:
+            name = declarator_name(decl.declarator)
+            ctype = build_type(specs, decl.declarator)
+            var_decls.append(AST.VarDecl(name, ctype, decl.init, span=span_from(start_pos)))
+        return var_decls
 
     def parse_decl_specs(allow_storage: bool = True, allow_function: bool = True) -> AST.DeclSpecs:
         start_pos = pos
         specs: list[AST.DeclSpec] = []
         types: list[AST.CType] = []
         builtins: list[AST.TypeKeyword] = []
+        seen_storage = False
 
         while True:
             tok = peek()
-            if tok.kind in STORAGE_CLASS:
+            if match_any(STORAGE_CLASS):
                 if not allow_storage:
                     error("Storage class not allowed here")
+                if seen_storage:
+                    error("Multiple storage class specifiers")
+                seen_storage = True
                 specs.append(AST.StorageClassSpec(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
-                advance()
-            elif tok.kind in TYPE_QUAL:
+            elif match_any(TYPE_QUAL):
                 specs.append(AST.TypeQualifier(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
-                advance()
-            elif tok.kind in FUNC_SPEC:
+            elif match_any(FUNC_SPEC):
                 if not allow_function:
                     error("Function specifier not allowed here")
                 specs.append(AST.FunctionSpec(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
-                advance()
-            elif tok.kind in BUILTIN_TYPES:
+            elif match_any(BUILTIN_TYPES):
                 builtins.append(AST.TypeKeyword(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
-                advance()
-            elif tok.kind == TokenKind.KW_STRUCT:
+            elif at(TokenKind.KW_STRUCT):
                 types.append(parse_struct_type())
-            elif tok.kind == TokenKind.KW_UNION:
+            elif at(TokenKind.KW_UNION):
                 types.append(parse_union_type())
-            elif tok.kind == TokenKind.KW_ENUM:
+            elif at(TokenKind.KW_ENUM):
                 types.append(parse_enum_type())
-            elif tok.kind == TokenKind.IDENT and tok.value in typedef_names:
+            elif at(TokenKind.IDENT) and peek().value in typedef_names:
                 name = ident(advance())
                 types.append(AST.NamedType(name, span=name.span))
             else:
