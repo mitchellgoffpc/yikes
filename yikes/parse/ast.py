@@ -239,11 +239,6 @@ class Member(NamedTuple):
     through_pointer: bool
     span: Span | None = None
 
-class ArraySubscript(NamedTuple):
-    value: Expr
-    index: Expr
-    span: Span | None = None
-
 class Conditional(NamedTuple):
     cond: Expr
     then: Expr
@@ -353,7 +348,7 @@ class NamedType(NamedTuple):
 
 
 Expr = (
-    Assign | Binary | Unary | IncDec | Call | Member | ArraySubscript | Conditional | Cast | Sizeof
+    Assign | Binary | Unary | IncDec | Call | Member | Conditional | Cast | Sizeof
     | IntLiteral | BoolLiteral | FloatLiteral | CharLiteral | StringLiteral | Identifier | CompoundLiteral
 )
 Initializer = Expr | InitList | CompoundLiteral
