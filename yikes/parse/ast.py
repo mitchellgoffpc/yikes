@@ -35,6 +35,49 @@ class Scope:
     labels: dict[str, Symbol] = field(default_factory=dict)
 
 
+# Intermediate AST nodes
+
+class InitDeclarator(NamedTuple):
+    declarator: Declarator
+    init: Initializer | None
+    span: Span | None = None
+
+class Declarator(NamedTuple):
+    pointer: Pointer | None
+    direct: DirectDeclarator
+    span: Span | None = None
+
+class DirectDeclarator(NamedTuple):
+    name: Identifier | None
+    nested: Declarator | None
+    suffixes: list[DirectSuffix]
+    span: Span | None = None
+
+class AbstractDeclarator(NamedTuple):
+    pointer: Pointer | None
+    direct: DirectAbstractDeclarator | None
+    span: Span | None = None
+
+class DirectAbstractDeclarator(NamedTuple):
+    nested: AbstractDeclarator | None
+    suffixes: list[DirectSuffix]
+    span: Span | None = None
+
+class DirectSuffix(NamedTuple):
+    params: list[ParamDecl] | None
+    array_size: Expr | None
+    is_static: bool
+    is_variadic: bool
+    span: Span | None = None
+
+class ParamDecl(NamedTuple):
+    specs: DeclSpecs
+    declarator: Declarator | AbstractDeclarator | None
+    span: Span | None = None
+
+
+# Core AST nodes
+
 class Program(NamedTuple):
     items: list[ExternalDecl]
     scope: Scope
@@ -105,47 +148,9 @@ class EnumDef(NamedTuple):
     values: list[Enumerator]
     span: Span | None = None
 
-class InitDeclarator(NamedTuple):
-    declarator: Declarator
-    init: Initializer | None
-    span: Span | None = None
-
-class Declarator(NamedTuple):
-    pointer: Pointer | None
-    direct: DirectDeclarator
-    span: Span | None = None
-
-class DirectDeclarator(NamedTuple):
-    name: Identifier | None
-    nested: Declarator | None
-    suffixes: list[DirectSuffix]
-    span: Span | None = None
-
-class DirectSuffix(NamedTuple):
-    params: list[ParamDecl] | None
-    array_size: Expr | None
-    is_static: bool
-    is_variadic: bool
-    span: Span | None = None
-
 class Pointer(NamedTuple):
     qualifiers: list[TypeQualifier]
     to: Pointer | None
-    span: Span | None = None
-
-class ParamDecl(NamedTuple):
-    specs: DeclSpecs
-    declarator: Declarator | AbstractDeclarator | None
-    span: Span | None = None
-
-class AbstractDeclarator(NamedTuple):
-    pointer: Pointer | None
-    direct: DirectAbstractDeclarator | None
-    span: Span | None = None
-
-class DirectAbstractDeclarator(NamedTuple):
-    nested: AbstractDeclarator | None
-    suffixes: list[DirectSuffix]
     span: Span | None = None
 
 class ExprStmt(NamedTuple):
@@ -158,13 +163,13 @@ class Return(NamedTuple):
 
 class If(NamedTuple):
     cond: Expr
-    then: Stmt
-    otherwise: Stmt | None
+    then: Block
+    otherwise: Block | None
     span: Span | None = None
 
 class While(NamedTuple):
     cond: Expr
-    body: Stmt
+    body: Block
     span: Span | None = None
 
 class Break(NamedTuple):
@@ -345,6 +350,7 @@ class EnumType(NamedTuple):
 class NamedType(NamedTuple):
     name: Identifier
     span: Span | None = None
+
 
 Expr = (
     Assign | Binary | Unary | IncDec | Call | Member | ArraySubscript | Conditional | Cast | Sizeof

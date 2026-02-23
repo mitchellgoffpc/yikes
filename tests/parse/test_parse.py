@@ -24,27 +24,6 @@ def _program(items: list[AST.ExternalDecl]) -> AST.Program:
 def _block(items: list[AST.Stmt]) -> AST.Block:
     return AST.Block(items, scope=AST.Scope())
 
-def _ptr(qualifiers: list[AST.TypeQualifier] | None = None, to: AST.Pointer | None = None) -> AST.Pointer:
-    return AST.Pointer(qualifiers or [], to)
-
-def _decl(name: str | None, *, pointer: AST.Pointer | None = None, nested: AST.Declarator | None = None,
-          suffixes: list[AST.DirectSuffix] | None = None) -> AST.Declarator:
-    ident = _id(name) if name is not None else None
-    return AST.Declarator(pointer, AST.DirectDeclarator(ident, nested, suffixes or []))
-
-def _init(name: str | None, init: AST.Initializer | None = None, *, pointer: AST.Pointer | None = None,
-          nested: AST.Declarator | None = None, suffixes: list[AST.DirectSuffix] | None = None) -> AST.InitDeclarator:
-    return AST.InitDeclarator(_decl(name, pointer=pointer, nested=nested, suffixes=suffixes), init)
-
-def _param(specs: AST.DeclSpecs, declarator: AST.Declarator | AST.AbstractDeclarator | None = None) -> AST.ParamDecl:
-    return AST.ParamDecl(specs, declarator)
-
-def _func_suffix(params: list[AST.ParamDecl] | None, variadic: bool = False) -> AST.DirectSuffix:
-    return AST.DirectSuffix(params or [], None, False, variadic)
-
-def _array_suffix(size: AST.Expr | None) -> AST.DirectSuffix:
-    return AST.DirectSuffix(None, size, False, False)
-
 def _init_item(value: AST.Initializer, designators: list[AST.Designator] | None = None) -> AST.InitializerItem:
     return AST.InitializerItem(designators or [], value)
 
@@ -169,21 +148,13 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
              AST.VarDecl(_id("a"), AST.ArrayType(_bt("int"), AST.IntLiteral(3)), None),
              AST.VarDecl(
                  _id("f"),
-                 AST.FunctionType(
-                     _bt("int"),
-                     [
-                         AST.Param(None, AST.ArrayType(_bt("int"), AST.IntLiteral(3))),
-                         AST.Param(None, AST.PointerType(_bt("int"))),
-                     ],
-                     False,
-                 ),
+                 AST.FunctionType( _bt("int"), [
+                     AST.Param(None, AST.ArrayType(_bt("int"), AST.IntLiteral(3))),
+                     AST.Param(None, AST.PointerType(_bt("int"))),
+                 ], False),
                  None,
              ),
-             AST.VarDecl(
-                 _id("g"),
-                 AST.FunctionType(_bt("int"), [AST.Param(None, _bt("int"))], True),
-                 None,
-             ),
+             AST.VarDecl(_id("g"), AST.FunctionType(_bt("int"), [AST.Param(None, _bt("int"))], True), None),
          ])),
         ("inline int f(void), g(int y);",
          _program([
@@ -194,11 +165,7 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
          _program([
              AST.VarDecl(
                  _id("f"),
-                 AST.FunctionType(
-                     _bt("int"),
-                     [AST.Param(_id("a"), AST.ArrayType(_bt("int"), AST.IntLiteral(3)))],
-                     False,
-                 ),
+                 AST.FunctionType(_bt("int"), [AST.Param(_id("a"), AST.ArrayType(_bt("int"), AST.IntLiteral(3)))], False),
                  None,
              ),
              AST.VarDecl(_id("g"), _bt("int"), None),
@@ -220,36 +187,30 @@ def test_statements(subtests: pytest.Subtests) -> None:
         ("return;", AST.Return(None)),
         ("return 1;", AST.Return(AST.IntLiteral(1))),
         ("if (x) y; else z;",
-         AST.If(AST.Identifier("x"), AST.ExprStmt(AST.Identifier("y")), AST.ExprStmt(AST.Identifier("z")))),
-        ("while (x) y;", AST.While(AST.Identifier("x"), AST.ExprStmt(AST.Identifier("y")))),
+         AST.If(
+             AST.Identifier("x"),
+             _block([AST.ExprStmt(AST.Identifier("y"))]),
+             _block([AST.ExprStmt(AST.Identifier("z"))]),
+         )),
+        ("while (x) y;", AST.While(AST.Identifier("x"), _block([AST.ExprStmt(AST.Identifier("y"))]))),
         ("do x; while (y);",
          AST.While(
              AST.BoolLiteral(True),
              _block([
                  AST.ExprStmt(AST.Identifier("x")),
-                 AST.If(AST.Unary("!", AST.Identifier("y")), AST.Break(), None),
+                 AST.If(AST.Unary("!", AST.Identifier("y")), _block([AST.Break()]), None),
              ]),
          )),
         ("for (;;) x;", AST.While(AST.BoolLiteral(True), _block([AST.ExprStmt(AST.Identifier("x"))]))),
-        ("for (i = 0; i < 3; i++) x;",
+        ("for (int i = 0, j = 1; i < 3; i++) x;",
          _block([
-             AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.IntLiteral(0))),
+             AST.VarDecl(_id("i"), _bt("int"), AST.IntLiteral(0)),
+             AST.VarDecl(_id("j"), _bt("int"), AST.IntLiteral(1)),
              AST.While(
                  AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
                  _block([
                      AST.ExprStmt(AST.Identifier("x")),
                      AST.ExprStmt(AST.IncDec("++", AST.Identifier("i"), True)),
-                 ]),
-             ),
-         ])),
-        ("for (int i = 0; i < 3; i = i + 1) x;",
-         _block([
-             AST.VarDecl(_id("i"), _bt("int"), AST.IntLiteral(0)),
-             AST.While(
-                 AST.Binary("<", AST.Identifier("i"), AST.IntLiteral(3)),
-                 _block([
-                     AST.ExprStmt(AST.Identifier("x")),
-                     AST.ExprStmt(AST.Assign(AST.Identifier("i"), AST.Binary("+", AST.Identifier("i"), AST.IntLiteral(1)))),
                  ]),
              ),
          ])),
@@ -298,7 +259,7 @@ def test_expressions(subtests: pytest.Subtests) -> None:
         ("*p", AST.Unary("*", AST.Identifier("p"))),
         ("&x", AST.Unary("&", AST.Identifier("x"))),
         ("f(1, 2)", AST.Call(AST.Identifier("f"), [AST.IntLiteral(1), AST.IntLiteral(2)])),
-        ("arr[3]", AST.ArraySubscript(AST.Identifier("arr"), AST.IntLiteral(3))),
+        ("arr[3]", AST.Unary("*", AST.Binary("+", AST.Identifier("arr"), AST.IntLiteral(3)))),
         ("obj.field", AST.Member(AST.Identifier("obj"), _id("field"), False)),
         ("ptr->field", AST.Member(AST.Identifier("ptr"), _id("field"), True)),
         ("(int) x", AST.Cast(_bt("int"), AST.Identifier("x"))),

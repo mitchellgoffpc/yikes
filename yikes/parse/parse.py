@@ -196,14 +196,14 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             expect(TokenKind.LPAREN)
             cond = parse_expr()
             expect(TokenKind.RPAREN)
-            then = parse_stmt()
-            otherwise = parse_stmt() if match(TokenKind.KW_ELSE) else None
+            then = ensure_block(parse_stmt())
+            otherwise = ensure_block(parse_stmt()) if match(TokenKind.KW_ELSE) else None
             return AST.If(cond, then, otherwise, span=span_from(start_pos))
         if match(TokenKind.KW_WHILE):
             expect(TokenKind.LPAREN)
             cond = parse_expr()
             expect(TokenKind.RPAREN)
-            return AST.While(cond, parse_stmt(), span=span_from(start_pos))
+            return AST.While(cond, ensure_block(parse_stmt()), span=span_from(start_pos))
         if match(TokenKind.KW_DO):
             return parse_do_while(start_pos)
         if match(TokenKind.KW_FOR):
@@ -250,7 +250,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         expect(TokenKind.RPAREN)
         expect(TokenKind.SEMI)
         loop_body = ensure_block(body)
-        tail = AST.If(AST.Unary("!", cond, span=cond.span), AST.Break(), None)
+        break_block = AST.Block([AST.Break()], scope=AST.Scope(), span=loop_body.span)
+        tail = AST.If(AST.Unary("!", cond, span=cond.span), break_block, None)
         wrapped_body = AST.Block(loop_body.items + [tail], scope=AST.Scope(), span=loop_body.span)
         return AST.While(AST.BoolLiteral(True), wrapped_body, span=span_from(start_pos))
 
@@ -764,7 +765,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             elif match(TokenKind.LBRACKET):
                 index = parse_expr()
                 expect(TokenKind.RBRACKET)
-                expr = AST.ArraySubscript(expr, index, span=span_from(start_pos))
+                binary = AST.Binary("+", expr, index, span=merge_spans(expr.span, index.span))
+                expr = AST.Unary("*", binary, span=span_from(start_pos))
             elif match(TokenKind.DOT):
                 expr = AST.Member(expr, expect_ident(), False, span=span_from(start_pos))
             elif match(TokenKind.ARROW):

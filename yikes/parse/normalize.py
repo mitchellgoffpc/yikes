@@ -119,9 +119,6 @@ def _normalize_fields(fields: list[AST.Field] | None) -> list[AST.Field] | None:
 def _normalize_enumerator(value: AST.Enumerator) -> AST.Enumerator:
     return AST.Enumerator(value.name, _normalize_expr(value.value) if value.value else None)
 
-def _normalize_init_declarator(node: AST.InitDeclarator) -> AST.InitDeclarator:
-    return AST.InitDeclarator(node.declarator, _normalize_initializer(node.init) if node.init else None)
-
 def _normalize_initializer(node: AST.Initializer) -> AST.Initializer:
     match node:
         case AST.InitList():
