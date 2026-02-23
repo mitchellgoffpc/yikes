@@ -52,7 +52,7 @@ def _resolve_function_def(node: AST.FunctionDef, scopes: list[AST.Scope]) -> Non
     _set_symbol_ctype(scopes[-1], node.name, resolved_ctype)
     function_scopes = [*scopes, node.body.scope]
     for param in resolved_ctype.params:
-        if param.name is not None:
+        if param.name:
             _set_symbol_ctype(function_scopes[-1], param.name, param.ctype)
     for item in node.body.items:
         _resolve_stmt(item, function_scopes)
@@ -62,13 +62,13 @@ def _resolve_param(param: AST.Param, scopes: list[AST.Scope]) -> AST.Param:
 
 def _resolve_tag_def(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> None:
     match ctype:
-        case AST.StructType(name=name, fields=[*fields]) if name is not None:
+        case AST.StructType(name=name, fields=[*fields]) if name:
             resolved_fields = [_resolve_field(field, scopes) for field in fields]
             _set_tag_ctype(scopes[-1], name, AST.StructType(name, resolved_fields))
-        case AST.UnionType(name=name, fields=[*fields]) if name is not None:
+        case AST.UnionType(name=name, fields=[*fields]) if name:
             resolved_fields = [_resolve_field(field, scopes) for field in fields]
             _set_tag_ctype(scopes[-1], name, AST.UnionType(name, resolved_fields))
-        case AST.EnumType(name=name, values=[*_]) if name is not None:
+        case AST.EnumType(name=name, values=[*_]) if name:
             _set_tag_ctype(scopes[-1], name, ctype)
 
 def _resolve_field(field: AST.Field, scopes: list[AST.Scope]) -> AST.Field:
@@ -102,40 +102,36 @@ def _resolve_named_type(name: AST.Identifier, scopes: list[AST.Scope], seen: set
         return AST.NamedType(name)
     seen.add(name.name)
     match _lookup_ident(scopes, name.name):
-        case AST.Symbol(kind=AST.SymbolKind.TYPEDEF, ctype=ctype) if ctype is not None:
+        case AST.Symbol(kind=AST.SymbolKind.TYPEDEF, ctype=ctype) if ctype:
             return _resolve_ctype(ctype, scopes, seen)
     return AST.NamedType(name)
 
 def _resolve_tag_type(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> AST.CType:
-    if ctype.name is not None:
-        symbol = _lookup_tag(scopes, ctype.name.name)
-        if symbol and symbol.ctype is not None:
-            match ctype:
-                case AST.EnumType(values=None) | AST.StructType(fields=None) | AST.UnionType(fields=None):
-                    return symbol.ctype
+    if ctype.name and (symbol := _lookup_tag(scopes, ctype.name.name)) and symbol.ctype:
+        match ctype:
+            case AST.EnumType(values=None) | AST.StructType(fields=None) | AST.UnionType(fields=None):
+                return symbol.ctype
     match ctype:
-        case AST.StructType(fields=[*fields]):
-            return AST.StructType(ctype.name, [_resolve_field(field, scopes) for field in fields])
-        case AST.UnionType(fields=[*fields]):
-            return AST.UnionType(ctype.name, [_resolve_field(field, scopes) for field in fields])
+        case AST.StructType(fields=[*fields]) | AST.UnionType(fields=[*fields]):
+            return ctype._replace(fields=[_resolve_field(field, scopes) for field in fields])
     return ctype
 
 def _lookup_ident(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
     for scope in reversed(scopes):
-        if (symbol := scope.idents.get(name)) is not None:
+        if symbol := scope.idents.get(name):
             return symbol
     return None
 
 def _lookup_tag(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
     for scope in reversed(scopes):
-        if (symbol := scope.tags.get(name)) is not None:
+        if symbol := scope.tags.get(name):
             return symbol
     return None
 
 def _set_symbol_ctype(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType) -> None:
-    if (symbol := scope.idents.get(name.name)) is not None and symbol.ctype is None:
+    if (symbol := scope.idents.get(name.name)) and symbol.ctype is None:
         symbol.ctype = ctype
 
 def _set_tag_ctype(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType) -> None:
-    if (symbol := scope.tags.get(name.name)) is not None:
+    if symbol := scope.tags.get(name.name):
         symbol.ctype = ctype

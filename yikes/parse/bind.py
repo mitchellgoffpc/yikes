@@ -26,7 +26,7 @@ def _bind_external_decl(node: AST.ExternalDecl, scope: AST.Scope) -> None:
             _add_tag(scope, node.ctype, node)
         case AST.EnumDef():
             _add_tag(scope, node.ctype, node)
-            if node.ctype.values is not None:
+            if node.ctype.values:
                 _bind_enumerators(scope, node.ctype.values)
 
 def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None:
@@ -45,7 +45,7 @@ def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None
             _add_tag(scope, node.ctype, node)
         case AST.EnumDef():
             _add_tag(scope, node.ctype, node)
-            if node.ctype.values is not None:
+            if node.ctype.values:
                 _bind_enumerators(scope, node.ctype.values)
         case AST.ExprStmt() | AST.Return() | AST.Break() | AST.Continue() | AST.Goto():
             return
@@ -72,7 +72,7 @@ def _bind_block(block: AST.Block, scope: AST.Scope, label_scope: AST.Scope, *, u
 
 def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
     for param in params:
-        if param.name is not None:
+        if param.name:
             _add_ident(scope, AST.SymbolKind.VAR, None, param)
         _bind_ctype_defs(param.ctype, scope, None)
 
@@ -92,7 +92,7 @@ def _bind_ctype_defs(ctype: AST.CType, scope: AST.Scope, owner: AST.SymbolDecl |
             _add_tag(scope, ctype, owner)
         case AST.EnumType(values=values):
             _add_tag(scope, ctype, owner)
-            if values is not None:
+            if values:
                 _bind_enumerators(scope, values)
         case AST.BuiltinType() | AST.NamedType():
             return

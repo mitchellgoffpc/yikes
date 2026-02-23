@@ -109,7 +109,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         return any(isinstance(s, AST.StorageClassSpec) and s.name == "typedef" for s in specs.specs)
 
     def is_void_param(specs: AST.DeclSpecs, decl: AST.Declarator | AST.AbstractDeclarator | None, params: list[AST.ParamDecl]) -> bool:
-        if decl is not None or params:
+        if decl or params:
             return False
         match specs:
             case AST.DeclSpecs(ctype=AST.BuiltinType(keywords=[AST.TypeKeyword(name="void")])):
@@ -124,9 +124,11 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         return AST.Program(items, scope=AST.Scope(), span=span_from(start_pos))
 
     def ensure_block(stmt: AST.Stmt) -> AST.Block:
-        if isinstance(stmt, AST.Block):
-            return stmt
-        return AST.Block([stmt], scope=AST.Scope(), span=stmt.span)
+        match stmt:
+            case AST.Block():
+                return stmt
+            case _:
+                return AST.Block([stmt], scope=AST.Scope(), span=stmt.span)
 
     def parse_external_decl() -> list[AST.ExternalDecl]:
         start_pos = pos
@@ -139,19 +141,20 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
         decls = parse_init_declarator_list()
         if at(TokenKind.LBRACE):
-            if len(decls) != 1 or decls[0].init is not None:
+            if len(decls) != 1 or decls[0].init:
                 error("Invalid function definition")
             name = declarator_name(decls[0].declarator)
             ctype = build_type(specs, decls[0].declarator)
-            if not isinstance(ctype, AST.FunctionType):
-                error("Function definition requires function type")
-            else:
-                body = parse_block()
-                return [AST.FunctionDef(name, specs, ctype, body, scope=AST.Scope(), span=span_from(start_pos))]
+            match ctype:
+                case AST.FunctionType():
+                    body = parse_block()
+                    return [AST.FunctionDef(name, specs, ctype, body, scope=AST.Scope(), span=span_from(start_pos))]
+                case _:
+                    error("Function definition requires function type")
 
         expect(TokenKind.SEMI)
         if is_typedef(specs):
-            if any(decl.init is not None for decl in decls):
+            if any(decl.init for decl in decls):
                 error("typedef may not have an initializer")
             typedefs: list[AST.ExternalDecl] = []
             for decl in decls:
@@ -297,7 +300,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         loop_body = parse_stmt()
 
         normalized_body = ensure_block(loop_body)
-        if step is not None:
+        if step:
             normalized_body = AST.Block(
                 normalized_body.items + [AST.ExprStmt(step, span=span_from(step_start_pos))],
                 scope=AST.Scope(),
@@ -320,7 +323,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         expect(TokenKind.SEMI)
 
         if is_typedef(specs):
-            if any(decl.init is not None for decl in decls):
+            if any(decl.init for decl in decls):
                 error("typedef may not have an initializer")
             typedefs: list[AST.Stmt] = []
             for decl in decls:
@@ -836,26 +839,26 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         def walk_decl(d: AST.Declarator) -> None:
             walk_direct(d.direct)
             p = d.pointer
-            while p is not None:
+            while p:
                 mods.append(p)
                 p = p.to
 
         def walk_direct(d: AST.DirectDeclarator) -> None:
-            if d.nested is not None:
+            if d.nested:
                 walk_decl(d.nested)
             for suf in d.suffixes:
                 mods.append(suf)
 
         def walk_abstract(d: AST.AbstractDeclarator) -> None:
-            if d.direct is not None:
+            if d.direct:
                 walk_direct_abs(d.direct)
             p = d.pointer
-            while p is not None:
+            while p:
                 mods.append(p)
                 p = p.to
 
         def walk_direct_abs(d: AST.DirectAbstractDeclarator) -> None:
-            if d.nested is not None:
+            if d.nested:
                 walk_abstract(d.nested)
             for suf in d.suffixes:
                 mods.append(suf)
@@ -869,8 +872,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
     def declarator_name(decl: AST.Declarator) -> AST.Identifier:
         direct = decl.direct
-        while direct is not None:
-            if direct.name is not None:
+        while direct:
+            if direct.name:
                 return direct.name
             if direct.nested is None:
                 break
