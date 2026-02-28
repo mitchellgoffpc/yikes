@@ -69,3 +69,20 @@ def test_function_and_block_scopes(subtests: pytest.Subtests) -> None:
                 inner = item.body.items[1]
                 assert isinstance(inner, AST.Block)
                 assert _idents(inner.scope) == expected["inner"]
+
+
+def test_duplicate_bindings(subtests: pytest.Subtests) -> None:
+    cases = [
+        ("int x; int x;", r"Duplicate identifier 'x' at 1:12"),
+        ("int f() { label: goto label; label: ; }", r"Duplicate label 'label' at 1:\d+"),
+        ("struct S { int x; }; struct S { int y; };", r"Duplicate tag 'S' at 1:\d+"),
+    ]
+
+    for source, error_match in cases:
+        with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
+            _bind_program(source)
+
+    source = "struct S *p; struct S { int x; };"
+    with subtests.test(source=source):
+        program = _bind_program(source)
+        assert _tags(program.scope) == {"S": AST.SymbolKind.TAG}

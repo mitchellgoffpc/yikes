@@ -101,14 +101,31 @@ def _bind_enumerators(scope: AST.Scope, values: list[AST.Enumerator]) -> None:
     for value in values:
         _add_ident(scope, AST.SymbolKind.ENUM_CONST, None, value)
 
+def _error(span: AST.Span | None, message: str) -> None:
+    assert span is not None, "Span is required for error reporting"
+    raise ValueError(f"{message} at {span.start.line}:{span.start.col}")
+
+def _has_tag_definition(ctype: AST.CType | None) -> bool:
+    match ctype:
+        case AST.StructType(fields=[*_]) | AST.UnionType(fields=[*_]) | AST.EnumType(values=[*_]):
+            return True
+    return False
+
 def _add_ident(scope: AST.Scope, kind: AST.SymbolKind, ctype: AST.CType | None, decl: AST.SymbolDecl) -> None:
-    if decl.name and decl.name.name not in scope.idents:
+    if decl.name:
+        if decl.name.name in scope.idents:
+            _error(decl.name.span, f"Duplicate identifier '{decl.name.name}'")
         scope.idents[decl.name.name] = AST.Symbol(decl.name.name, kind, ctype, decl)
 
 def _add_tag(scope: AST.Scope, ctype: AST.StructType | AST.UnionType | AST.EnumType, decl: AST.SymbolDecl | None) -> None:
-    if ctype.name and ctype.name.name not in scope.tags:
-        scope.tags[ctype.name.name] = AST.Symbol(ctype.name.name, AST.SymbolKind.TAG, ctype, decl)
+    if ctype.name:
+        existing = scope.tags.get(ctype.name.name)
+        if existing and _has_tag_definition(ctype) and _has_tag_definition(existing.ctype):
+            _error(ctype.name.span, f"Duplicate tag '{ctype.name.name}'")
+        if not existing:
+            scope.tags[ctype.name.name] = AST.Symbol(ctype.name.name, AST.SymbolKind.TAG, ctype, decl)
 
 def _add_label(scope: AST.Scope, decl: AST.Label) -> None:
-    if decl.name.name not in scope.labels:
-        scope.labels[decl.name.name] = AST.Symbol(decl.name.name, AST.SymbolKind.LABEL, None, decl)
+    if decl.name.name in scope.labels:
+        _error(decl.name.span, f"Duplicate label '{decl.name.name}'")
+    scope.labels[decl.name.name] = AST.Symbol(decl.name.name, AST.SymbolKind.LABEL, None, decl)
