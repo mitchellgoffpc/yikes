@@ -17,25 +17,15 @@ def _resolve_external_decl(node: AST.ExternalDecl, scopes: list[AST.Scope]) -> A
         case AST.FunctionDef():
             return _resolve_function_def(node, scopes)
         case AST.VarDecl():
-            resolved = _resolve_ctype(node.ctype, scopes)
-            init = _resolve_initializer(node.init, scopes) if node.init else None
-            _set_symbol_ctype(scopes[-1], node.name, resolved)
-            return node._replace(ctype=resolved, init=init)
+            return _resolve_var_decl(node, scopes)
         case AST.TypeDef():
-            resolved = _resolve_ctype(node.ctype, scopes)
-            _set_symbol_ctype(scopes[-1], node.name, resolved)
-            return node._replace(ctype=resolved)
+            return _resolve_type_def(node, scopes)
         case AST.StructDef():
-            resolved = _resolve_struct_def(node.ctype, scopes)
-            return node._replace(ctype=resolved)
+            return node._replace(ctype=_resolve_struct_def(node.ctype, scopes))
         case AST.UnionDef():
-            resolved = _resolve_union_def(node.ctype, scopes)
-            return node._replace(ctype=resolved)
+            return node._replace(ctype=_resolve_union_def(node.ctype, scopes))
         case AST.EnumDef():
-            resolved = _resolve_enum_def(node.ctype, scopes)
-            return node._replace(ctype=resolved)
-        case _:
-            raise TypeError(f"Unknown external decl: {type(node).__name__}")
+            return node._replace(ctype=_resolve_enum_def(node.ctype, scopes))
 
 
 def _resolve_stmt(node: AST.Stmt, scopes: list[AST.Scope]) -> AST.Stmt:
@@ -43,23 +33,15 @@ def _resolve_stmt(node: AST.Stmt, scopes: list[AST.Scope]) -> AST.Stmt:
         case AST.Block():
             return _resolve_block(node, scopes)
         case AST.VarDecl():
-            resolved = _resolve_ctype(node.ctype, scopes)
-            init = _resolve_initializer(node.init, scopes) if node.init else None
-            _set_symbol_ctype(scopes[-1], node.name, resolved)
-            return node._replace(ctype=resolved, init=init)
+            return _resolve_var_decl(node, scopes)
         case AST.TypeDef():
-            resolved = _resolve_ctype(node.ctype, scopes)
-            _set_symbol_ctype(scopes[-1], node.name, resolved)
-            return node._replace(ctype=resolved)
+            return _resolve_type_def(node, scopes)
         case AST.StructDef():
-            resolved = _resolve_struct_def(node.ctype, scopes)
-            return node._replace(ctype=resolved)
+            return node._replace(ctype=_resolve_struct_def(node.ctype, scopes))
         case AST.UnionDef():
-            resolved = _resolve_union_def(node.ctype, scopes)
-            return node._replace(ctype=resolved)
+            return node._replace(ctype=_resolve_union_def(node.ctype, scopes))
         case AST.EnumDef():
-            resolved = _resolve_enum_def(node.ctype, scopes)
-            return node._replace(ctype=resolved)
+            return node._replace(ctype=_resolve_enum_def(node.ctype, scopes))
         case AST.ExprStmt(expr=expr):
             expr = _resolve_expr(expr, scopes) if expr else None
             return node._replace(expr=expr)
@@ -91,8 +73,6 @@ def _resolve_stmt(node: AST.Stmt, scopes: list[AST.Scope]) -> AST.Stmt:
         case AST.Label(stmt=stmt):
             stmt = _resolve_stmt(stmt, scopes)
             return node._replace(stmt=stmt)
-        case _:
-            raise TypeError(f"Unknown stmt: {type(node).__name__}")
 
 
 def _resolve_block(block: AST.Block, scopes: list[AST.Scope]) -> AST.Block:
@@ -101,80 +81,74 @@ def _resolve_block(block: AST.Block, scopes: list[AST.Scope]) -> AST.Block:
     return block._replace(items=items)
 
 
+def _resolve_var_decl(node: AST.VarDecl, scopes: list[AST.Scope]) -> AST.VarDecl:
+    resolved = _resolve_ctype(node.ctype, scopes)
+    init = _resolve_initializer(node.init, scopes) if node.init else None
+    scopes[-1].idents[node.name.name].ctype = resolved
+    return node._replace(ctype=resolved, init=init)
+
+
+def _resolve_type_def(node: AST.TypeDef, scopes: list[AST.Scope]) -> AST.TypeDef:
+    resolved = _resolve_ctype(node.ctype, scopes)
+    scopes[-1].idents[node.name.name].ctype = resolved
+    return node._replace(ctype=resolved)
+
+
 def _resolve_function_def(node: AST.FunctionDef, scopes: list[AST.Scope]) -> AST.FunctionDef:
     resolved_ctype = _resolve_ctype(node.ctype, scopes)
-    resolved_ctype = _ensure_function_type(resolved_ctype, node.name.span)
-    _set_symbol_ctype(scopes[-1], node.name, resolved_ctype)
+    if not isinstance(resolved_ctype, AST.FunctionType):
+        _error(node.name.span, "Function type required")
+    if isinstance(resolved_ctype.return_type, (AST.ArrayType, AST.FunctionType)):
+        _error(node.name.span, "Function cannot return array or function type")
+    scopes[-1].idents[node.name.name].ctype = resolved_ctype
     function_scopes = [*scopes, node.body.scope]
     for param in resolved_ctype.params:
         if param.name:
-            _set_symbol_ctype(function_scopes[-1], param.name, param.ctype)
+            function_scopes[-1].idents[param.name.name].ctype = param.ctype
     body = _resolve_block(node.body, function_scopes)
     return node._replace(ctype=resolved_ctype, body=body)
 
 
-def _resolve_param(param: AST.Param, scopes: list[AST.Scope]) -> AST.Param:
-    return AST.Param(param.name, _resolve_ctype(param.ctype, scopes))
-
-
 def _resolve_struct_def(ctype: AST.StructType, scopes: list[AST.Scope]) -> AST.StructType:
-    match ctype:
-        case AST.StructType(name=name, fields=[*fields]):
-            resolved_fields = [_resolve_field(field, scopes) for field in fields]
-            resolved = AST.StructType(name, resolved_fields)
-            if name:
-                _set_tag_ctype(scopes[-1], name, resolved)
-            return resolved
-    return ctype
+    if ctype.fields is None:
+        return ctype
+    resolved_fields = [_resolve_field(field, scopes) for field in ctype.fields]
+    resolved = AST.StructType(ctype.name, resolved_fields)
+    if ctype.name:
+        scopes[-1].tags[ctype.name.name].ctype = resolved
+    return resolved
 
 
 def _resolve_union_def(ctype: AST.UnionType, scopes: list[AST.Scope]) -> AST.UnionType:
-    match ctype:
-        case AST.UnionType(name=name, fields=[*fields]):
-            resolved_fields = [_resolve_field(field, scopes) for field in fields]
-            resolved = AST.UnionType(name, resolved_fields)
-            if name:
-                _set_tag_ctype(scopes[-1], name, resolved)
-            return resolved
-    return ctype
+    if ctype.fields is None:
+        return ctype
+    resolved_fields = [_resolve_field(field, scopes) for field in ctype.fields]
+    resolved = AST.UnionType(ctype.name, resolved_fields)
+    if ctype.name:
+        scopes[-1].tags[ctype.name.name].ctype = resolved
+    return resolved
 
 
 def _resolve_enum_def(ctype: AST.EnumType, scopes: list[AST.Scope]) -> AST.EnumType:
-    match ctype:
-        case AST.EnumType(name=name, values=[*values]):
-            resolved_values = [_resolve_enumerator(value, scopes) for value in values]
-            resolved = AST.EnumType(name, resolved_values)
-            if name:
-                _set_tag_ctype(scopes[-1], name, resolved)
-            return resolved
-    return ctype
+    if ctype.values is None:
+        return ctype
+    resolved_values = [_resolve_enumerator(value, scopes) for value in ctype.values]
+    resolved = AST.EnumType(ctype.name, resolved_values)
+    if ctype.name:
+        scopes[-1].tags[ctype.name.name].ctype = resolved
+    return resolved
 
 
-def _resolve_enumerator(value: AST.Enumerator, scopes: list[AST.Scope]) -> AST.Enumerator:
-    if value.value is None:
-        return value
-    expr = _resolve_expr(value.value, scopes)
-    const_value = const_eval(expr)
-    if const_value is None:
-        _error(expr.span, "Enumerator value is not a constant expression")
-    return value._replace(value=AST.IntLiteral(const_value, span=expr.span))
+def _resolve_enumerator(enumerator: AST.Enumerator, scopes: list[AST.Scope]) -> AST.Enumerator:
+    return enumerator._replace(value=_resolve_const_int(enumerator.value, scopes, "Enumerator value is not a constant expression"))
 
 
 def _resolve_field(field: AST.Field, scopes: list[AST.Scope]) -> AST.Field:
-    bit_width = _resolve_bit_width(field.bit_width, scopes)
+    bit_width = _resolve_const_int(field.bit_width, scopes, "Bit-field width is not a constant expression")
     ctype = _resolve_ctype(field.ctype, scopes)
-    _ensure_field_type(ctype, field.span)
+    if isinstance(ctype, AST.FunctionType) or _is_void(ctype) or not _is_complete(ctype):
+        _error(field.span, "Invalid field type")
     return AST.Field(field.name, ctype, bit_width)
-
-
-def _resolve_bit_width(bit_width: AST.Expr | None, scopes: list[AST.Scope]) -> AST.Expr | None:
-    if bit_width is None:
-        return None
-    resolved = _resolve_expr(bit_width, scopes)
-    value = const_eval(resolved)
-    if value is None:
-        _error(resolved.span, "Bit-field width is not a constant expression")
-    return AST.IntLiteral(value, span=resolved.span)
 
 
 def _resolve_ctype(ctype: AST.CType, scopes: list[AST.Scope], seen: set[str] | None = None) -> AST.CType:
@@ -187,29 +161,21 @@ def _resolve_ctype(ctype: AST.CType, scopes: list[AST.Scope], seen: set[str] | N
             return AST.PointerType(_resolve_ctype(ctype.base, scopes, seen))
         case AST.ArrayType():
             base = _resolve_ctype(ctype.base, scopes, seen)
-            size = _resolve_array_size(ctype.size, scopes)
+            size = _resolve_const_int(ctype.size, scopes, "Array size is not a constant expression")
             return AST.ArrayType(base, size)
         case AST.FunctionType():
             resolved = AST.FunctionType(
                 _resolve_ctype(ctype.return_type, scopes, seen),
-                [_resolve_param(param, scopes) for param in ctype.params],
+                [AST.Param(param.name, _resolve_ctype(param.ctype, scopes)) for param in ctype.params],
                 ctype.variadic,
             )
-            return _ensure_function_type(resolved, ctype.span)
+            if isinstance(resolved.return_type, (AST.ArrayType, AST.FunctionType)):
+                _error(ctype.span, "Function cannot return array or function type")
+            return resolved
         case AST.StructType() | AST.UnionType() | AST.EnumType():
             return _resolve_tag_type(ctype, scopes)
         case _:
             raise TypeError(f"Unknown ctype: {type(ctype).__name__}")
-
-
-def _resolve_array_size(size: AST.Expr | None, scopes: list[AST.Scope]) -> AST.Expr | None:
-    if size is None:
-        return None
-    resolved = _resolve_expr(size, scopes)
-    value = const_eval(resolved)
-    if value is None:
-        _error(resolved.span, "Array size is not a constant expression")
-    return AST.IntLiteral(value, span=resolved.span)
 
 
 def _resolve_named_type(name: AST.Identifier, scopes: list[AST.Scope], seen: set[str] | None) -> AST.CType:
@@ -238,21 +204,15 @@ def _resolve_tag_type(ctype: AST.StructType | AST.UnionType | AST.EnumType, scop
 
 
 def _resolve_initializer(init: AST.Initializer, scopes: list[AST.Scope]) -> AST.Initializer:
-    if isinstance(init, AST.InitList):
-        items = [_resolve_initializer_item(item, scopes) for item in init.items]
-        return init._replace(items=items)
+    match init:
+        case AST.InitList():
+            return init._replace(items=[_resolve_initializer_item(item, scopes) for item in init.items])
     return _resolve_expr(init, scopes)
 
 
 def _resolve_initializer_item(item: AST.InitializerItem, scopes: list[AST.Scope]) -> AST.InitializerItem:
-    designators: list[AST.Designator] = []
-    for designator in item.designators:
-        if designator.index:
-            designators.append(designator._replace(index=_resolve_expr(designator.index, scopes)))
-        else:
-            designators.append(designator)
-    value = _resolve_initializer(item.value, scopes)
-    return item._replace(designators=designators, value=value)
+    designators = [d._replace(index=_resolve_expr(d.index, scopes)) if d.index else d for d in item.designators]
+    return item._replace(designators=designators, value=_resolve_initializer(item.value, scopes))
 
 
 def _resolve_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
@@ -302,29 +262,8 @@ def _resolve_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
     raise TypeError(f"Unknown expr: {type(expr).__name__}")
 
 
-def _ensure_function_type(ctype: AST.CType, span: AST.Span | None) -> AST.FunctionType:
-    if not isinstance(ctype, AST.FunctionType):
-        _error(span, "Function type required")
-    if _is_array(ctype.return_type) or _is_function(ctype.return_type):
-        _error(span, "Function cannot return array or function type")
-    return ctype
-
-
-def _ensure_field_type(ctype: AST.CType, span: AST.Span | None) -> None:
-    if _is_void(ctype) or _is_function(ctype) or not _is_complete(ctype):
-        _error(span, "Invalid field type")
-
-
 def _is_void(ctype: AST.CType) -> bool:
     return isinstance(ctype, AST.BuiltinType) and any(kw.name == "void" for kw in ctype.keywords)
-
-
-def _is_array(ctype: AST.CType) -> bool:
-    return isinstance(ctype, AST.ArrayType)
-
-
-def _is_function(ctype: AST.CType) -> bool:
-    return isinstance(ctype, AST.FunctionType)
 
 
 def _is_complete(ctype: AST.CType) -> bool:
@@ -360,14 +299,14 @@ def _lookup_tag(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
     return None
 
 
-def _set_symbol_ctype(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType) -> None:
-    if symbol := scope.idents.get(name.name):
-        symbol.ctype = ctype
-
-
-def _set_tag_ctype(scope: AST.Scope, name: AST.Identifier, ctype: AST.CType) -> None:
-    if symbol := scope.tags.get(name.name):
-        symbol.ctype = ctype
+def _resolve_const_int(expr: AST.Expr | None, scopes: list[AST.Scope], error_message: str) -> AST.IntLiteral | None:
+    if expr is None:
+        return None
+    resolved = _resolve_expr(expr, scopes)
+    value = const_eval(resolved)
+    if value is None:
+        _error(resolved.span, error_message)
+    return AST.IntLiteral(value, span=resolved.span)
 
 
 def _error(span: AST.Span | None, message: str) -> NoReturn:

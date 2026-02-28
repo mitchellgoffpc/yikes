@@ -51,13 +51,7 @@ def _check_stmt(node: AST.Stmt, scopes: list[AST.Scope], ctx: FuncContext) -> AS
             _ensure_object_type(node.ctype, node.name.span)
             init = _check_initializer(node.init, node.ctype, scopes) if node.init else None
             return node._replace(init=init)
-        case AST.TypeDef():
-            return node
-        case AST.StructDef():
-            return node
-        case AST.UnionDef():
-            return node
-        case AST.EnumDef():
+        case AST.TypeDef() | AST.StructDef() | AST.UnionDef() | AST.EnumDef():
             return node
         case AST.ExprStmt(expr=expr):
             expr = _check_expr(expr, scopes) if expr else None
