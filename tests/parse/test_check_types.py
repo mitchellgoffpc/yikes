@@ -12,10 +12,8 @@ from yikes.parse.resolve_types import resolve_types
 def _type_program(source: str) -> AST.Program:
     return check_types(resolve_types(bind(parse(source))))
 
-
 def _bt(name: str) -> AST.BuiltinType:
     return AST.BuiltinType([AST.TypeKeyword(name)])
-
 
 def _type_key(ctype: AST.CType) -> tuple:
     match ctype:
@@ -38,7 +36,6 @@ def _type_key(ctype: AST.CType) -> tuple:
             return ("named", name.name)
     return ("unknown", id(ctype))
 
-
 def test_expression_types(subtests: pytest.Subtests) -> None:
     cases = [
         ("1;", _bt("int")),
@@ -51,7 +48,6 @@ def test_expression_types(subtests: pytest.Subtests) -> None:
         ("int *p; int *q; p - q;", _bt("int")),
         ("struct A { int x; }; struct A a; a.x;", _bt("int")),
     ]
-
     for body, expected in cases:
         with subtests.test(body=body):
             program = _type_program(f"int f() {{ {body} }}")
@@ -63,17 +59,14 @@ def test_expression_types(subtests: pytest.Subtests) -> None:
             assert stmt.expr.expr_type is not None
             assert _type_key(stmt.expr.expr_type) == _type_key(expected)
 
-
 def test_external_decl_errors(subtests: pytest.Subtests) -> None:
     cases = [
         ("void x;", r"Object type required at \d+:\d+"),
         ("struct S s;", r"Incomplete object type at \d+:\d+"),
     ]
-
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
             _type_program(source)
-
 
 def test_statement_type_errors(subtests: pytest.Subtests) -> None:
     cases = [
@@ -83,11 +76,9 @@ def test_statement_type_errors(subtests: pytest.Subtests) -> None:
         ("typedef struct S { int x; } S; int f() { S s; while (s) return 1; return 0; }", r"Expected scalar type at \d+:\d+"),
         ("int f() { switch (1.0) { default: break; } }", r"Expected integer type at \d+:\d+"),
     ]
-
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
             _type_program(source)
-
 
 def test_expression_errors(subtests: pytest.Subtests) -> None:
     cases = [
@@ -126,7 +117,6 @@ def test_expression_errors(subtests: pytest.Subtests) -> None:
         ("int f() { return sizeof(struct S); }", r"Invalid sizeof operand at \d+:\d+"),
         ("int f() { (void){1}; return 0; }", r"Object type required at \d+:\d+"),
     ]
-
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
             _type_program(source)

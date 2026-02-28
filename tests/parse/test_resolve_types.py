@@ -28,7 +28,6 @@ def _tag(scope: AST.Scope, name: str) -> AST.Symbol:
     assert symbol is not None
     return symbol
 
-
 def test_global_type_resolution(subtests: pytest.Subtests) -> None:
     cases = [
         ("struct S { int x; }; struct S s;",
@@ -78,7 +77,6 @@ def test_global_type_resolution(subtests: pytest.Subtests) -> None:
          {"idents": {"f": AST.FunctionType(_bt("int"), [AST.Param(_id("a"), _bt("int"))], True)},
           "tags": {}}),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             program = _resolve_program(source)
@@ -86,7 +84,6 @@ def test_global_type_resolution(subtests: pytest.Subtests) -> None:
                 assert _ident(program.scope, name).ctype == ctype
             for name, ctype in expected["tags"].items():
                 assert _tag(program.scope, name).ctype == ctype
-
 
 def test_param_scope_types(subtests: pytest.Subtests) -> None:
     cases = [
@@ -97,7 +94,6 @@ def test_param_scope_types(subtests: pytest.Subtests) -> None:
         ("int f(struct S { int x; } s) { return s.x; }",
          {"s": AST.StructType(_id("S"), [AST.Field(_id("x"), _bt("int"), None)])}),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             program = _resolve_program(source)
@@ -105,7 +101,6 @@ def test_param_scope_types(subtests: pytest.Subtests) -> None:
             assert isinstance(item, AST.FunctionDef)
             for name, ctype in expected.items():
                 assert _ident(item.body.scope, name).ctype == ctype
-
 
 def test_external_decl_errors(subtests: pytest.Subtests) -> None:
     cases = [
@@ -120,7 +115,6 @@ def test_external_decl_errors(subtests: pytest.Subtests) -> None:
         ("int x; int a[x];", r"Array size is not a constant expression at \d+:\d+"),
         ("typedef int T()[3];", r"Function cannot return array or function type at \d+:\d+"),
     ]
-
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
             resolve_types(bind(parse(source)))

@@ -16,7 +16,6 @@ def _idents(scope: AST.Scope) -> dict[str, AST.SymbolKind]:
 def _tags(scope: AST.Scope) -> dict[str, AST.SymbolKind]:
     return {name: symbol.kind for name, symbol in scope.tags.items()}
 
-
 def test_global_bindings(subtests: pytest.Subtests) -> None:
     cases = [
         ("typedef int T; T x; int y;",
@@ -27,49 +26,11 @@ def test_global_bindings(subtests: pytest.Subtests) -> None:
         ("struct S { int x; }; struct S s;",
          {"idents": {"s": AST.SymbolKind.VAR}, "tags": {"S": AST.SymbolKind.TAG}}),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             program = _bind_program(source)
             assert _idents(program.scope) == expected["idents"]
             assert _tags(program.scope) == expected["tags"]
-
-
-def test_function_and_block_scopes(subtests: pytest.Subtests) -> None:
-    cases = [
-        ("int f(int a, int b) { int c; { int d; } }",
-         {"body": {"a": AST.SymbolKind.VAR, "b": AST.SymbolKind.VAR, "c": AST.SymbolKind.VAR}, "inner": {"d": AST.SymbolKind.VAR}}),
-        ("int f() { for (int i = 0; i < 3; i++) { int j; } }",
-         {"body": {}, "for_block": {"i": AST.SymbolKind.VAR}, "inner": {"j": AST.SymbolKind.VAR}}),
-        ("int f() { label: goto label; }",
-         {"labels": {"label": AST.SymbolKind.LABEL}}),
-    ]
-
-    for source, expected in cases:
-        with subtests.test(source=source):
-            program = _bind_program(source)
-            item = program.items[0]
-            assert isinstance(item, AST.FunctionDef)
-
-            if "labels" in expected:
-                assert {name: symbol.kind for name, symbol in item.scope.labels.items()} == expected["labels"]
-                continue
-
-            assert _idents(item.body.scope) == expected["body"]
-            if "for_block" in expected:
-                loop_block = item.body.items[0]
-                assert isinstance(loop_block, AST.Block)
-                assert _idents(loop_block.scope) == expected["for_block"]
-                while_stmt = loop_block.items[1]
-                assert isinstance(while_stmt, AST.While)
-                body = while_stmt.body
-                assert isinstance(body, AST.Block)
-                assert _idents(body.scope) == expected["inner"]
-            else:
-                inner = item.body.items[1]
-                assert isinstance(inner, AST.Block)
-                assert _idents(inner.scope) == expected["inner"]
-
 
 def test_duplicate_bindings(subtests: pytest.Subtests) -> None:
     cases = [
@@ -81,8 +42,36 @@ def test_duplicate_bindings(subtests: pytest.Subtests) -> None:
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
             _bind_program(source)
-
     source = "struct S *p; struct S { int x; };"
     with subtests.test(source=source):
         program = _bind_program(source)
         assert _tags(program.scope) == {"S": AST.SymbolKind.TAG}
+
+def test_function_scopes() -> None:
+    program = _bind_program("int f(int a, int b) { int c; { int d; } }")
+    item = program.items[0]
+    assert isinstance(item, AST.FunctionDef)
+    assert _idents(item.body.scope) == {"a": AST.SymbolKind.VAR, "b": AST.SymbolKind.VAR, "c": AST.SymbolKind.VAR}
+    inner = item.body.items[1]
+    assert isinstance(inner, AST.Block)
+    assert _idents(inner.scope) == {"d": AST.SymbolKind.VAR}
+
+def test_for_loop_block_scopes() -> None:
+    program = _bind_program("int f() { for (int i = 0; i < 3; i++) { int j; } }")
+    item = program.items[0]
+    assert isinstance(item, AST.FunctionDef)
+    assert _idents(item.body.scope) == {}
+    loop_block = item.body.items[0]
+    assert isinstance(loop_block, AST.Block)
+    assert _idents(loop_block.scope) == {"i": AST.SymbolKind.VAR}
+    while_stmt = loop_block.items[1]
+    assert isinstance(while_stmt, AST.While)
+    body = while_stmt.body
+    assert isinstance(body, AST.Block)
+    assert _idents(body.scope) == {"j": AST.SymbolKind.VAR}
+
+def test_function_labels_scope() -> None:
+    program = _bind_program("int f() { label: goto label; }")
+    item = program.items[0]
+    assert isinstance(item, AST.FunctionDef)
+    assert {name: symbol.kind for name, symbol in item.scope.labels.items()} == {"label": AST.SymbolKind.LABEL}

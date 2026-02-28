@@ -42,7 +42,6 @@ def _expr(source: str) -> AST.Expr:
     assert stmt.expr is not None
     return stmt.expr
 
-
 def test_program_decls(subtests: pytest.Subtests) -> None:
     cases = [
         ("struct S { int :1; int a:2; int b; };",
@@ -129,11 +128,9 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              ),
          ])),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             assert parse(source, with_spans=False) == expected
-
 
 def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
     cases = [
@@ -171,11 +168,9 @@ def test_declarators_and_specs(subtests: pytest.Subtests) -> None:
              AST.VarDecl(_id("q"), AST.PointerType(_bt("int")), None),
          ])),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             assert parse(source, with_spans=False) == expected
-
 
 def test_statements(subtests: pytest.Subtests) -> None:
     cases = [
@@ -223,11 +218,9 @@ def test_statements(subtests: pytest.Subtests) -> None:
         (";", AST.ExprStmt(None)),
         ("x;", AST.ExprStmt(AST.Identifier("x"))),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             assert _stmt(source) == expected
-
 
 def test_expressions(subtests: pytest.Subtests) -> None:
     cases = [
@@ -266,11 +259,9 @@ def test_expressions(subtests: pytest.Subtests) -> None:
         ("'a'", AST.CharLiteral("a")),
         ("\"hi\"", AST.StringLiteral("hi")),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             assert _expr(source) == expected
-
 
 def test_initializers(subtests: pytest.Subtests) -> None:
     cases = [
@@ -326,11 +317,9 @@ def test_initializers(subtests: pytest.Subtests) -> None:
              ),
          ])),
     ]
-
     for source, expected in cases:
         with subtests.test(source=source):
             assert parse(source, with_spans=False) == expected
-
 
 def test_spans(subtests: pytest.Subtests) -> None:
     source = "int main() {\n  return 42;\n}\n"
@@ -349,6 +338,7 @@ def test_spans(subtests: pytest.Subtests) -> None:
             span=_span(1, 1, 3, 2),
         ),
     ], AST.Scope(), span=_span(1, 1, 3, 2))
+
     with subtests.test(source=source):
         assert parse(source) == expected
 
@@ -372,5 +362,6 @@ def test_spans(subtests: pytest.Subtests) -> None:
             _span(1, 1, 1, 29),
         ),
     ], AST.Scope(), span=_span(1, 1, 1, 29))
+
     with subtests.test(source=source):
         assert parse(source) == expected

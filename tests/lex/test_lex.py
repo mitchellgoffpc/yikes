@@ -9,7 +9,6 @@ from yikes.lex.tokens import TokenKind
 def _simplify(tokens: list) -> list[tuple[TokenKind, object | None]]:
     return [(token.kind, token.value) for token in tokens]
 
-
 def test_identifiers_and_keywords(subtests: pytest.Subtests) -> None:
     cases = [
         ("foo bar", [(TokenKind.IDENT, "foo"), (TokenKind.IDENT, "bar"), (TokenKind.EOF, None)]),
@@ -20,7 +19,6 @@ def test_identifiers_and_keywords(subtests: pytest.Subtests) -> None:
     for source, expected in cases:
         with subtests.test(source=source):
             assert _simplify(lex(source)) == expected
-
 
 def test_numbers(subtests: pytest.Subtests) -> None:
     cases = [
@@ -33,7 +31,6 @@ def test_numbers(subtests: pytest.Subtests) -> None:
         with subtests.test(source=source):
             assert _simplify(lex(source)) == expected
 
-
 def test_strings_and_chars(subtests: pytest.Subtests) -> None:
     cases = [
         ("'a' \"hi\"", [(TokenKind.CHAR_LITERAL, "a"), (TokenKind.STRING_LITERAL, "hi"), (TokenKind.EOF, None)]),
@@ -44,7 +41,6 @@ def test_strings_and_chars(subtests: pytest.Subtests) -> None:
     for source, expected in cases:
         with subtests.test(source=source):
             assert _simplify(lex(source)) == expected
-
 
 def test_punctuators_and_operators(subtests: pytest.Subtests) -> None:
     cases = [
@@ -63,7 +59,6 @@ def test_punctuators_and_operators(subtests: pytest.Subtests) -> None:
         with subtests.test(source=source):
             assert _simplify(lex(source)) == expected
 
-
 def test_comments_and_whitespace(subtests: pytest.Subtests) -> None:
     cases = [
         ("a // comment\nb", [(TokenKind.IDENT, "a"), (TokenKind.IDENT, "b"), (TokenKind.EOF, None)]),
@@ -74,7 +69,6 @@ def test_comments_and_whitespace(subtests: pytest.Subtests) -> None:
     for source, expected in cases:
         with subtests.test(source=source):
             assert _simplify(lex(source)) == expected
-
 
 def test_errors(subtests: pytest.Subtests) -> None:
     cases = [
