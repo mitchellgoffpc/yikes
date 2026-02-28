@@ -208,7 +208,6 @@ TYPE_QUAL = {
 }
 FUNC_SPEC = {TokenKind.KW_INLINE}
 BUILTIN_TYPES = {
-    TokenKind.KW_VOID,
     TokenKind.KW_CHAR,
     TokenKind.KW_SHORT,
     TokenKind.KW_INT,

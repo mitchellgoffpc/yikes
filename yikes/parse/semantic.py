@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from yikes.parse import ast as AST  # noqa: N812
-from yikes.parse.helpers import const_eval, error, is_complete, is_void, lookup_ident
+from yikes.parse.helpers import const_eval, error, is_complete, lookup_ident
 
 
 @dataclass
@@ -407,7 +407,7 @@ def _rvalue_type(ctype: AST.CType) -> AST.CType:
 
 
 def _ensure_object_type(ctype: AST.CType, span: AST.Span | None) -> None:
-    if is_void(ctype) or isinstance(ctype, AST.FunctionType):
+    if isinstance(ctype, (AST.VoidType, AST.FunctionType)):
         error(span, "Object type required")
     if not is_complete(ctype):
         error(span, "Incomplete object type")
@@ -474,7 +474,7 @@ def _ensure_scalar(ctype: AST.CType, span: AST.Span | None) -> None:
 
 
 def _ensure_void(ctype: AST.CType, span: AST.Span | None) -> None:
-    if not is_void(ctype):
+    if not isinstance(ctype, AST.VoidType):
         error(span, "Expected void return")
 
 
@@ -524,7 +524,7 @@ def _is_scalar(ctype: AST.CType) -> bool:
 def _compatible_pointer(left: AST.CType, right: AST.CType) -> bool:
     match left, right:
         case AST.PointerType(base=left_base), AST.PointerType(base=right_base):
-            return is_void(left_base) or is_void(right_base) or _type_key(left_base) == _type_key(right_base)
+            return isinstance(left_base, AST.VoidType) or isinstance(right_base, AST.VoidType) or _type_key(left_base) == _type_key(right_base)
     return False
 
 
@@ -532,6 +532,8 @@ def _type_key(ctype: AST.CType) -> tuple:
     match ctype:
         case AST.BuiltinType(keywords=keywords):
             return ("builtin", tuple(sorted(kw.name for kw in keywords)))
+        case AST.VoidType():
+            return ("void",)
         case AST.PointerType(base=base):
             return ("ptr", _type_key(base))
         case AST.ArrayType(base=base, size=size):

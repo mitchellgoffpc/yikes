@@ -326,6 +326,9 @@ class BuiltinType(NamedTuple):
     keywords: list[TypeKeyword]
     span: Span | None = None
 
+class VoidType(NamedTuple):
+    span: Span | None = None
+
 class PointerType(NamedTuple):
     base: CType
     span: Span | None = None
@@ -366,7 +369,7 @@ Expr = (
     | IntLiteral | BoolLiteral | FloatLiteral | CharLiteral | StringLiteral | Identifier | CompoundLiteral
 )
 Initializer = Expr | InitList | CompoundLiteral
-CType = BuiltinType | PointerType | ArrayType | FunctionType | StructType | UnionType | EnumType | NamedType
+CType = BuiltinType | VoidType | PointerType | ArrayType | FunctionType | StructType | UnionType | EnumType | NamedType
 DeclSpec = StorageClassSpec | TypeQualifier | FunctionSpec
 ExternalDecl = FunctionDef | VarDecl | TypeDef | StructDef | UnionDef | EnumDef
 Stmt = (

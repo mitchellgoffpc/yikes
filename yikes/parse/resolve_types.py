@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from yikes.parse import ast as AST  # noqa: N812
-from yikes.parse.helpers import const_eval, error, is_complete, is_void, lookup_ident
+from yikes.parse.helpers import const_eval, error, is_complete, lookup_ident
 
 
 def resolve_types(program: AST.Program) -> AST.Program:
@@ -144,14 +144,14 @@ def _resolve_enumerator(enumerator: AST.Enumerator, scopes: list[AST.Scope]) -> 
 def _resolve_field(field: AST.Field, scopes: list[AST.Scope]) -> AST.Field:
     bit_width = _resolve_const_int(field.bit_width, scopes, "Bit-field width is not a constant expression")
     ctype = _resolve_ctype(field.ctype, scopes)
-    if isinstance(ctype, AST.FunctionType) or is_void(ctype) or not is_complete(ctype):
+    if isinstance(ctype, (AST.FunctionType, AST.VoidType)) or not is_complete(ctype):
         error(field.span, "Invalid field type")
     return AST.Field(field.name, ctype, bit_width)
 
 
 def _resolve_ctype(ctype: AST.CType, scopes: list[AST.Scope], seen: set[str] | None = None) -> AST.CType:
     match ctype:
-        case AST.BuiltinType():
+        case AST.BuiltinType() | AST.VoidType():
             return ctype
         case AST.NamedType(name=name):
             return _resolve_named_type(name, scopes, seen)

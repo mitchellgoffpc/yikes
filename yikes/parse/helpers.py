@@ -73,27 +73,16 @@ def const_eval(expr: AST.Expr | None) -> int | None:
     return None
 
 
-def is_void(ctype: AST.CType) -> bool:
-    return isinstance(ctype, AST.BuiltinType) and any(kw.name == "void" for kw in ctype.keywords)
-
-
 def is_complete(ctype: AST.CType) -> bool:
     match ctype:
-        case AST.BuiltinType():
-            return not is_void(ctype)
-        case AST.PointerType():
+        case AST.BuiltinType() | AST.PointerType() | AST.EnumType():
             return True
+        case AST.VoidType() | AST.NamedType() | AST.FunctionType():
+            return False
         case AST.ArrayType(base=base, size=size):
             return size is not None and is_complete(base)
-        case AST.FunctionType():
-            return False
         case AST.StructType(fields=fields) | AST.UnionType(fields=fields):
             return fields is not None and all(is_complete(field.ctype) for field in fields)
-        case AST.EnumType():
-            return True
-        case AST.NamedType():
-            return False
-    return False
 
 
 def lookup_ident(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:

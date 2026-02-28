@@ -85,6 +85,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             or tok.kind in TYPE_QUAL
             or tok.kind in FUNC_SPEC
             or tok.kind in BUILTIN_TYPES
+            or tok.kind == TokenKind.KW_VOID
             or tok.kind in {TokenKind.KW_STRUCT, TokenKind.KW_UNION, TokenKind.KW_ENUM}
             or (tok.kind == TokenKind.IDENT and tok.value in typedef_names)
         )
@@ -112,7 +113,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         if decl or params:
             return False
         match specs:
-            case AST.DeclSpecs(ctype=AST.BuiltinType(keywords=[AST.TypeKeyword(name="void")])):
+            case AST.DeclSpecs(ctype=AST.VoidType()):
                 return True
         return False
 
@@ -362,6 +363,8 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
                 if not allow_function:
                     error("Function specifier not allowed here")
                 specs.append(AST.FunctionSpec(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
+            elif match(TokenKind.KW_VOID):
+                types.append(AST.VoidType(span=span(tok)))
             elif match_any(BUILTIN_TYPES):
                 builtins.append(AST.TypeKeyword(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
             elif at(TokenKind.KW_STRUCT):

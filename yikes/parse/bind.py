@@ -94,7 +94,7 @@ def _bind_ctype_defs(ctype: AST.CType, scope: AST.Scope, owner: AST.SymbolDecl |
             _add_tag(scope, ctype, owner)
             if values:
                 _bind_enumerators(scope, values)
-        case AST.BuiltinType() | AST.NamedType():
+        case AST.BuiltinType() | AST.VoidType() | AST.NamedType():
             return
 
 def _bind_enumerators(scope: AST.Scope, values: list[AST.Enumerator]) -> None:
