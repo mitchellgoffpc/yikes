@@ -1,46 +1,33 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from yikes.parse import ast as AST  # noqa: N812
 from yikes.parse.helpers import const_eval, error, is_complete, lookup_ident
 
 
 @dataclass
-class SwitchContext:
-    cases: set[int] = field(default_factory=set)
-    has_default: bool = False
-
-
-@dataclass
-class FuncContext:
+class TypeContext:
     return_type: AST.CType
-    label_scope: AST.Scope
-    loop_depth: int = 0
-    switch_stack: list[SwitchContext] = field(default_factory=list)
 
-
-def semantic(program: AST.Program) -> AST.Program:
+def check_types(program: AST.Program) -> AST.Program:
     scopes = [program.scope]
     items = [_check_external_decl(item, scopes) for item in program.items]
     return program._replace(items=items)
-
 
 def _check_external_decl(node: AST.ExternalDecl, scopes: list[AST.Scope]) -> AST.ExternalDecl:
     match node:
         case AST.FunctionDef():
             func_type = _ensure_function_type(node.ctype, node.name.span)
-            ctx = FuncContext(func_type.return_type, node.scope)
+            ctx = TypeContext(func_type.return_type)
             body = _check_block(node.body, scopes, ctx)
             return node._replace(ctype=func_type, body=body)
         case AST.VarDecl():
             return _check_var_decl(node, scopes)
         case AST.TypeDef() | AST.StructDef() | AST.UnionDef() | AST.EnumDef():
             return node
-    raise TypeError(f"Unknown external decl: {type(node).__name__}")
 
-
-def _check_stmt(node: AST.Stmt, scopes: list[AST.Scope], ctx: FuncContext) -> AST.Stmt:
+def _check_stmt(node: AST.Stmt, scopes: list[AST.Scope], ctx: TypeContext) -> AST.Stmt:
     match node:
         case AST.Block():
             return _check_block(node, scopes, ctx)
@@ -67,71 +54,38 @@ def _check_stmt(node: AST.Stmt, scopes: list[AST.Scope], ctx: FuncContext) -> AS
         case AST.While(cond=cond, body=body):
             cond = _check_expr(cond, scopes)
             _ensure_scalar(_expr_type(cond), cond.span)
-            ctx.loop_depth += 1
             body = _check_block(body, scopes, ctx)
-            ctx.loop_depth -= 1
             return node._replace(cond=cond, body=body)
-        case AST.Break():
-            if ctx.loop_depth == 0 and not ctx.switch_stack:
-                error(node.span, "break not within loop or switch")
-            return node
-        case AST.Continue():
-            if ctx.loop_depth == 0:
-                error(node.span, "continue not within loop")
+        case AST.Break() | AST.Continue():
             return node
         case AST.Switch(expr=expr, body=body):
             expr = _check_expr(expr, scopes)
             _ensure_integer(_expr_type(expr), expr.span)
-            ctx.switch_stack.append(SwitchContext())
             body = _check_block(body, scopes, ctx)
-            ctx.switch_stack.pop()
             return node._replace(expr=expr, body=body)
         case AST.Case(value=value, body=body):
-            if not ctx.switch_stack:
-                error(node.span, "case not within switch")
             value = _check_expr(value, scopes)
             _ensure_integer(_expr_type(value), value.span)
-            const = const_eval(value)
-            if const is None:
-                error(value.span, "case value is not an integer constant expression")
-            switch = ctx.switch_stack[-1]
-            if const in switch.cases:
-                error(value.span, "duplicate case value")
-            switch.cases.add(const)
             body = _check_block(body, scopes, ctx)
             return node._replace(value=value, body=body)
         case AST.Default(body=body):
-            if not ctx.switch_stack:
-                error(node.span, "default not within switch")
-            switch = ctx.switch_stack[-1]
-            if switch.has_default:
-                error(node.span, "duplicate default label")
-            switch.has_default = True
             body = _check_block(body, scopes, ctx)
             return node._replace(body=body)
-        case AST.Label(name=name, stmt=stmt):
-            if name.name not in ctx.label_scope.labels:
-                error(name.span, f"Unknown label '{name.name}'")
+        case AST.Label(stmt=stmt):
             stmt = _check_stmt(stmt, scopes, ctx)
             return node._replace(stmt=stmt)
-        case AST.Goto(target=target):
-            if target.name not in ctx.label_scope.labels:
-                error(target.span, f"Unknown label '{target.name}'")
+        case AST.Goto():
             return node
-    raise TypeError(f"Unknown stmt: {type(node).__name__}")
 
-
-def _check_block(block: AST.Block, scopes: list[AST.Scope], ctx: FuncContext) -> AST.Block:
+def _check_block(block: AST.Block, scopes: list[AST.Scope], ctx: TypeContext) -> AST.Block:
     block_scopes = [*scopes, block.scope]
     items = [_check_stmt(item, block_scopes, ctx) for item in block.items]
     return block._replace(items=items, scope=block.scope)
-
 
 def _check_var_decl(node: AST.VarDecl, scopes: list[AST.Scope]) -> AST.VarDecl:
     _ensure_object_type(node.ctype, node.name.span)
     init = _check_initializer(node.init, node.ctype, scopes) if node.init else None
     return node._replace(init=init)
-
 
 def _check_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
     match expr:
@@ -207,8 +161,6 @@ def _check_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
             _ensure_object_type(ctype, expr.span)
             value = _check_initializer(value, ctype, scopes)
             return expr._replace(ctype=ctype, value=value, expr_type=ctype)
-    raise TypeError(f"Unknown expr: {type(expr).__name__}")
-
 
 def _check_initializer(init: AST.Initializer, target: AST.CType, scopes: list[AST.Scope]) -> AST.Initializer:
     if isinstance(init, AST.InitList):
@@ -224,7 +176,6 @@ def _check_initializer(init: AST.Initializer, target: AST.CType, scopes: list[AS
     _ensure_assignable(target, expr, expr.span)
     return expr
 
-
 def _check_init_list_array(init: AST.InitList, target: AST.ArrayType, scopes: list[AST.Scope]) -> list[AST.InitializerItem]:
     items: list[AST.InitializerItem] = []
     for item in init.items:
@@ -232,7 +183,6 @@ def _check_init_list_array(init: AST.InitList, target: AST.ArrayType, scopes: li
         value = _check_initializer(item.value, target.base, scopes)
         items.append(item._replace(designators=designators, value=value))
     return items
-
 
 def _check_init_list_struct(init: AST.InitList, target: AST.StructType | AST.UnionType, scopes: list[AST.Scope]) -> list[AST.InitializerItem]:
     if target.fields is None:
@@ -248,7 +198,6 @@ def _check_init_list_struct(init: AST.InitList, target: AST.StructType | AST.Uni
         items.append(item._replace(designators=designators, value=value))
     return items
 
-
 def _check_designator(designator: AST.Designator, scopes: list[AST.Scope]) -> AST.Designator:
     if designator.index:
         index = _check_expr(designator.index, scopes)
@@ -258,7 +207,6 @@ def _check_designator(designator: AST.Designator, scopes: list[AST.Scope]) -> AS
         return designator._replace(index=index)
     return designator
 
-
 def _designated_field(target: AST.StructType | AST.UnionType, designator: AST.Designator) -> AST.Field | None:
     if designator.field is None:
         return None
@@ -267,12 +215,10 @@ def _designated_field(target: AST.StructType | AST.UnionType, designator: AST.De
             return struct_field
     error(designator.span, f"Unknown field '{designator.field.name}'")
 
-
 def _expr_type(expr: AST.Expr) -> AST.CType:
     if expr.expr_type is None:
         error(expr.span, "Expression type missing")
     return expr.expr_type
-
 
 def _binary_type(op: str, left: AST.Expr, right: AST.Expr, span: AST.Span | None) -> AST.CType:
     if op == ",":
@@ -303,7 +249,6 @@ def _binary_type(op: str, left: AST.Expr, right: AST.Expr, span: AST.Span | None
         return _bool_type()
     error(span, f"Unknown binary operator '{op}'")
 
-
 def _unary_type(op: str, value: AST.Expr, span: AST.Span | None) -> tuple[AST.CType, bool]:
     if op in {"+", "-"}:
         _ensure_arithmetic(_expr_type(value), value.span)
@@ -322,7 +267,6 @@ def _unary_type(op: str, value: AST.Expr, span: AST.Span | None) -> tuple[AST.CT
         return AST.PointerType(_expr_type(value)), False
     error(span, f"Unknown unary operator '{op}'")
 
-
 def _call_type(func: AST.Expr, args: list[AST.Expr], span: AST.Span | None) -> AST.CType:
     func_type = _rvalue_type(_expr_type(func))
     if isinstance(func_type, AST.PointerType):
@@ -338,7 +282,6 @@ def _call_type(func: AST.Expr, args: list[AST.Expr], span: AST.Span | None) -> A
         param_type = _rvalue_type(param.ctype)
         _ensure_assignable(param_type, arg, arg.span)
     return func_type.return_type
-
 
 def _member_type(value: AST.Expr, name: AST.Identifier, through_pointer: bool, span: AST.Span | None) -> AST.CType:
     ctype = _expr_type(value)
@@ -356,7 +299,6 @@ def _member_type(value: AST.Expr, name: AST.Identifier, through_pointer: bool, s
             return struct_field.ctype
     error(name.span, f"Unknown field '{name.name}'")
 
-
 def _conditional_type(then: AST.Expr, otherwise: AST.Expr, span: AST.Span | None) -> AST.CType:
     then_type = _rvalue_type(_expr_type(then))
     otherwise_type = _rvalue_type(_expr_type(otherwise))
@@ -373,7 +315,6 @@ def _conditional_type(then: AST.Expr, otherwise: AST.Expr, span: AST.Span | None
             return otherwise_type
     error(span, "Incompatible types in conditional expression")
 
-
 def _add_sub_type(op: str, left: AST.Expr, right: AST.Expr, span: AST.Span | None) -> AST.CType:
     left_type = _rvalue_type(_expr_type(left))
     right_type = _rvalue_type(_expr_type(right))
@@ -389,13 +330,11 @@ def _add_sub_type(op: str, left: AST.Expr, right: AST.Expr, span: AST.Span | Non
     _ensure_arithmetic(right_type, right.span)
     return _usual_arithmetic(left_type, right_type)
 
-
 def _deref_type(ctype: AST.CType, span: AST.Span | None) -> AST.CType:
     match _rvalue_type(ctype):
         case AST.PointerType(base=base):
             return base
     error(span, "Cannot dereference non-pointer")
-
 
 def _rvalue_type(ctype: AST.CType) -> AST.CType:
     match ctype:
@@ -405,13 +344,11 @@ def _rvalue_type(ctype: AST.CType) -> AST.CType:
             return AST.PointerType(ctype)
     return ctype
 
-
 def _ensure_object_type(ctype: AST.CType, span: AST.Span | None) -> None:
     if isinstance(ctype, (AST.VoidType, AST.FunctionType)):
         error(span, "Object type required")
     if not is_complete(ctype):
         error(span, "Incomplete object type")
-
 
 def _ensure_function_type(ctype: AST.CType, span: AST.Span | None) -> AST.FunctionType:
     match ctype:
@@ -420,7 +357,6 @@ def _ensure_function_type(ctype: AST.CType, span: AST.Span | None) -> AST.Functi
                 error(span, "Function cannot return array or function type")
             return ctype
     error(span, "Function type required")
-
 
 def _ensure_assignable(target: AST.CType, value: AST.Expr, span: AST.Span | None) -> None:
     target = _rvalue_type(target)
@@ -434,49 +370,40 @@ def _ensure_assignable(target: AST.CType, value: AST.Expr, span: AST.Span | None
             return
     error(span, "Incompatible types in assignment")
 
-
 def _ensure_castable(ctype: AST.CType, span: AST.Span | None) -> None:
     if isinstance(ctype, AST.FunctionType):
         error(span, "Cannot cast to function type")
     if not is_complete(ctype):
         error(span, "Cannot cast to incomplete type")
 
-
 def _ensure_sizeof_type(ctype: AST.CType, span: AST.Span | None) -> None:
     if isinstance(ctype, AST.FunctionType) or not is_complete(ctype):
         error(span, "Invalid sizeof operand")
 
-
 def _ensure_lvalue(expr: AST.Expr) -> None:
     if not _is_lvalue(expr):
         error(expr.span, "Expected lvalue")
-
 
 def _ensure_modifiable_lvalue(expr: AST.Expr) -> None:
     _ensure_lvalue(expr)
     if isinstance(_expr_type(expr), (AST.ArrayType, AST.FunctionType)):
         error(expr.span, "Expected modifiable lvalue")
 
-
 def _ensure_integer(ctype: AST.CType, span: AST.Span | None) -> None:
     if not _is_integer(ctype):
         error(span, "Expected integer type")
-
 
 def _ensure_arithmetic(ctype: AST.CType, span: AST.Span | None) -> None:
     if not _is_arithmetic(ctype):
         error(span, "Expected arithmetic type")
 
-
 def _ensure_scalar(ctype: AST.CType, span: AST.Span | None) -> None:
     if not _is_scalar(ctype):
         error(span, "Expected scalar type")
 
-
 def _ensure_void(ctype: AST.CType, span: AST.Span | None) -> None:
     if not isinstance(ctype, AST.VoidType):
         error(span, "Expected void return")
-
 
 def _ensure_comparable(left: AST.CType, right: AST.CType, span: AST.Span | None) -> None:
     left = _rvalue_type(left)
@@ -487,13 +414,11 @@ def _ensure_comparable(left: AST.CType, right: AST.CType, span: AST.Span | None)
         return
     error(span, "Incompatible types for comparison")
 
-
 def _is_lvalue(expr: AST.Expr) -> bool:
     match expr:
         case AST.Identifier() | AST.Member() | AST.StringLiteral() | AST.Unary(op="*"):
             return True
     return False
-
 
 def _is_integer(ctype: AST.CType) -> bool:
     match ctype:
@@ -504,7 +429,6 @@ def _is_integer(ctype: AST.CType) -> bool:
             return bool(names & {"bool", "char", "short", "int", "long", "signed", "unsigned"})
     return False
 
-
 def _is_floating(ctype: AST.CType) -> bool:
     match ctype:
         case AST.BuiltinType(keywords=keywords):
@@ -512,21 +436,17 @@ def _is_floating(ctype: AST.CType) -> bool:
             return bool(names & {"float", "double", "complex", "imaginary"})
     return False
 
-
 def _is_arithmetic(ctype: AST.CType) -> bool:
     return _is_integer(ctype) or _is_floating(ctype)
 
-
 def _is_scalar(ctype: AST.CType) -> bool:
     return _is_arithmetic(ctype) or isinstance(ctype, AST.PointerType)
-
 
 def _compatible_pointer(left: AST.CType, right: AST.CType) -> bool:
     match left, right:
         case AST.PointerType(base=left_base), AST.PointerType(base=right_base):
             return isinstance(left_base, AST.VoidType) or isinstance(right_base, AST.VoidType) or _type_key(left_base) == _type_key(right_base)
     return False
-
 
 def _type_key(ctype: AST.CType) -> tuple:
     match ctype:
@@ -550,7 +470,6 @@ def _type_key(ctype: AST.CType) -> tuple:
         case AST.NamedType(name=name):
             return ("named", name.name)
 
-
 def _usual_arithmetic(left: AST.CType, right: AST.CType) -> AST.CType:
     if _is_floating(left) or _is_floating(right):
         if _is_double_type(left) or _is_double_type(right):
@@ -558,26 +477,20 @@ def _usual_arithmetic(left: AST.CType, right: AST.CType) -> AST.CType:
         return _float_type()
     return _int_type()
 
-
 def _is_double_type(ctype: AST.CType) -> bool:
     return isinstance(ctype, AST.BuiltinType) and any(kw.name == "double" for kw in ctype.keywords)
-
 
 def _int_type() -> AST.CType:
     return AST.BuiltinType([AST.TypeKeyword("int")])
 
-
 def _bool_type() -> AST.CType:
     return AST.BuiltinType([AST.TypeKeyword("bool")])
-
 
 def _char_type() -> AST.CType:
     return AST.BuiltinType([AST.TypeKeyword("char")])
 
-
 def _float_type() -> AST.CType:
     return AST.BuiltinType([AST.TypeKeyword("float")])
-
 
 def _double_type() -> AST.CType:
     return AST.BuiltinType([AST.TypeKeyword("double")])

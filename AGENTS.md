@@ -4,15 +4,13 @@ yikes is a simple C compiler written in Python.
 
 # Contributing
 
-## Code Style
+## Style Guide
 
 - Write clean and concise code. Don't add too many comments.
 - Don't split things into multiple lines for no reason. Things that easily fit within the line limit of 160 characters should usually be on one line as long as it doesn't impact readability.
-
-## Style Guide
-
 - Avoid short docstrings. Use docstrings only when detailed documentation spanning multiple lines is required, which should be rare.
 - Always use absolute imports.
+- Functions should always be separated by a single blank line, never by two blank lines.
 
 ## Before Committing
 

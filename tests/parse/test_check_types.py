@@ -4,16 +4,18 @@ import pytest
 
 from yikes.parse import ast as AST  # noqa: N812
 from yikes.parse.bind import bind
+from yikes.parse.check_types import check_types
 from yikes.parse.parse import parse
 from yikes.parse.resolve_types import resolve_types
-from yikes.parse.semantic import semantic
 
 
-def _semantic_program(source: str) -> AST.Program:
-    return semantic(resolve_types(bind(parse(source))))
+def _type_program(source: str) -> AST.Program:
+    return check_types(resolve_types(bind(parse(source))))
+
 
 def _bt(name: str) -> AST.BuiltinType:
     return AST.BuiltinType([AST.TypeKeyword(name)])
+
 
 def _type_key(ctype: AST.CType) -> tuple:
     match ctype:
@@ -52,7 +54,7 @@ def test_expression_types(subtests: pytest.Subtests) -> None:
 
     for body, expected in cases:
         with subtests.test(body=body):
-            program = _semantic_program(f"int f() {{ {body} }}")
+            program = _type_program(f"int f() {{ {body} }}")
             item = program.items[0]
             assert isinstance(item, AST.FunctionDef)
             stmt = item.body.items[-1]
@@ -70,25 +72,7 @@ def test_external_decl_errors(subtests: pytest.Subtests) -> None:
 
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
-            _semantic_program(source)
-
-
-def test_control_flow_errors(subtests: pytest.Subtests) -> None:
-    cases = [
-        ("int f() { break; }", r"break not within loop or switch at \d+:\d+"),
-        ("int f() { continue; }", r"continue not within loop at \d+:\d+"),
-        ("int f() { case 1: break; }", r"case not within switch at \d+:\d+"),
-        ("int f() { default: break; }", r"default not within switch at \d+:\d+"),
-        ("int f() { switch (1.0) { default: break; } }", r"Expected integer type at \d+:\d+"),
-        ("int f() { int x = 1; switch (1) { case x: break; } }", r"case value is not an integer constant expression at \d+:\d+"),
-        ("int f() { switch (1) { case 1: break; case 1: break; } }", r"duplicate case value at \d+:\d+"),
-        ("int f() { switch (1) { default: break; default: break; } }", r"duplicate default label at \d+:\d+"),
-        ("int f() { goto missing; }", r"Unknown label 'missing' at \d+:\d+"),
-    ]
-
-    for source, error_match in cases:
-        with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
-            _semantic_program(source)
+            _type_program(source)
 
 
 def test_statement_type_errors(subtests: pytest.Subtests) -> None:
@@ -97,11 +81,12 @@ def test_statement_type_errors(subtests: pytest.Subtests) -> None:
         ("void f() { return 1; }", r"Incompatible types in assignment at \d+:\d+"),
         ("typedef struct S { int x; } S; int f() { S s; if (s) return 1; return 0; }", r"Expected scalar type at \d+:\d+"),
         ("typedef struct S { int x; } S; int f() { S s; while (s) return 1; return 0; }", r"Expected scalar type at \d+:\d+"),
+        ("int f() { switch (1.0) { default: break; } }", r"Expected integer type at \d+:\d+"),
     ]
 
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
-            _semantic_program(source)
+            _type_program(source)
 
 
 def test_expression_errors(subtests: pytest.Subtests) -> None:
@@ -144,4 +129,4 @@ def test_expression_errors(subtests: pytest.Subtests) -> None:
 
     for source, error_match in cases:
         with subtests.test(source=source), pytest.raises(ValueError, match=error_match):
-            _semantic_program(source)
+            _type_program(source)

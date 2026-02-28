@@ -72,7 +72,6 @@ def const_eval(expr: AST.Expr | None) -> int | None:
             return const_eval(then if cond_val else otherwise)
     return None
 
-
 def is_complete(ctype: AST.CType) -> bool:
     match ctype:
         case AST.BuiltinType() | AST.PointerType() | AST.EnumType():
@@ -84,13 +83,11 @@ def is_complete(ctype: AST.CType) -> bool:
         case AST.StructType(fields=fields) | AST.UnionType(fields=fields):
             return fields is not None and all(is_complete(field.ctype) for field in fields)
 
-
 def lookup_ident(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
     for scope in reversed(scopes):
         if symbol := scope.idents.get(name):
             return symbol
     return None
-
 
 def error(span: AST.Span | None, message: str) -> NoReturn:
     assert span is not None

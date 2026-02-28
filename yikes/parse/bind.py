@@ -20,9 +20,7 @@ def _bind_external_decl(node: AST.ExternalDecl, scope: AST.Scope) -> None:
         case AST.TypeDef():
             _bind_ctype_defs(node.ctype, scope, node)
             _add_ident(scope, AST.SymbolKind.TYPEDEF, None, node)
-        case AST.StructDef():
-            _add_tag(scope, node.ctype, node)
-        case AST.UnionDef():
+        case AST.StructDef() | AST.UnionDef():
             _add_tag(scope, node.ctype, node)
         case AST.EnumDef():
             _add_tag(scope, node.ctype, node)
@@ -39,27 +37,19 @@ def _bind_stmt(node: AST.Stmt, scope: AST.Scope, label_scope: AST.Scope) -> None
         case AST.TypeDef():
             _bind_ctype_defs(node.ctype, scope, node)
             _add_ident(scope, AST.SymbolKind.TYPEDEF, None, node)
-        case AST.StructDef():
-            _add_tag(scope, node.ctype, node)
-        case AST.UnionDef():
+        case AST.StructDef() | AST.UnionDef():
             _add_tag(scope, node.ctype, node)
         case AST.EnumDef():
             _add_tag(scope, node.ctype, node)
             if node.ctype.values:
                 _bind_enumerators(scope, node.ctype.values)
-        case AST.ExprStmt() | AST.Return() | AST.Break() | AST.Continue() | AST.Goto():
-            return
         case AST.If():
             _bind_stmt(node.then, scope, label_scope)
             if node.otherwise:
                 _bind_stmt(node.otherwise, scope, label_scope)
         case AST.While():
             _bind_stmt(node.body, scope, label_scope)
-        case AST.Switch():
-            _bind_block(node.body, scope, label_scope)
-        case AST.Case():
-            _bind_block(node.body, scope, label_scope)
-        case AST.Default():
+        case AST.Switch() | AST.Case() | AST.Default():
             _bind_block(node.body, scope, label_scope)
         case AST.Label():
             _add_label(label_scope, node)
@@ -86,16 +76,12 @@ def _bind_ctype_defs(ctype: AST.CType, scope: AST.Scope, owner: AST.SymbolDecl |
             _bind_ctype_defs(ctype.return_type, scope, owner)
             for param in ctype.params:
                 _bind_ctype_defs(param.ctype, scope, owner)
-        case AST.StructType():
-            _add_tag(scope, ctype, owner)
-        case AST.UnionType():
+        case AST.StructType() | AST.UnionType():
             _add_tag(scope, ctype, owner)
         case AST.EnumType(values=values):
             _add_tag(scope, ctype, owner)
             if values:
                 _bind_enumerators(scope, values)
-        case AST.BuiltinType() | AST.VoidType() | AST.NamedType():
-            return
 
 def _bind_enumerators(scope: AST.Scope, values: list[AST.Enumerator]) -> None:
     for value in values:
