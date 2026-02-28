@@ -336,7 +336,7 @@ def test_spans(subtests: pytest.Subtests) -> None:
     source = "int main() {\n  return 42;\n}\n"
     expected = AST.Program([
         AST.FunctionDef(
-            AST.Identifier("main", _span(1, 5, 1, 9)),
+            AST.Identifier("main", span=_span(1, 5, 1, 9)),
             AST.DeclSpecs([], AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)), _span(1, 1, 1, 4)),
             AST.FunctionType(
                 AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)),
@@ -344,7 +344,7 @@ def test_spans(subtests: pytest.Subtests) -> None:
                 False,
                 _span(1, 9, 1, 4),
             ),
-            AST.Block([AST.Return(AST.IntLiteral(42, _span(2, 10, 2, 12)), _span(2, 3, 2, 13))], scope=AST.Scope(), span=_span(1, 12, 3, 2)),
+            AST.Block([AST.Return(AST.IntLiteral(42, span=_span(2, 10, 2, 12)), _span(2, 3, 2, 13))], scope=AST.Scope(), span=_span(1, 12, 3, 2)),
             scope=AST.Scope(),
             span=_span(1, 1, 3, 2),
         ),
@@ -355,17 +355,17 @@ def test_spans(subtests: pytest.Subtests) -> None:
     source = "int x = { [1] = 2, .a = 3 };"
     expected = AST.Program([
         AST.VarDecl(
-            AST.Identifier("x", _span(1, 5, 1, 6)),
+            AST.Identifier("x", span=_span(1, 5, 1, 6)),
             AST.BuiltinType([AST.TypeKeyword("int", _span(1, 1, 1, 4))], _span(1, 1, 1, 4)),
             AST.InitList([
                 AST.InitializerItem(
-                    [AST.Designator(None, AST.IntLiteral(1, _span(1, 12, 1, 13)), _span(1, 11, 1, 14))],
-                    AST.IntLiteral(2, _span(1, 17, 1, 18)),
+                    [AST.Designator(None, AST.IntLiteral(1, span=_span(1, 12, 1, 13)), _span(1, 11, 1, 14))],
+                    AST.IntLiteral(2, span=_span(1, 17, 1, 18)),
                     _span(1, 11, 1, 18),
                 ),
                 AST.InitializerItem(
-                    [AST.Designator(AST.Identifier("a", _span(1, 21, 1, 22)), None, _span(1, 20, 1, 22))],
-                    AST.IntLiteral(3, _span(1, 25, 1, 26)),
+                    [AST.Designator(AST.Identifier("a", span=_span(1, 21, 1, 22)), None, _span(1, 20, 1, 22))],
+                    AST.IntLiteral(3, span=_span(1, 25, 1, 26)),
                     _span(1, 20, 1, 26),
                 ),
             ], _span(1, 9, 1, 28)),

@@ -202,78 +202,94 @@ class Goto(NamedTuple):
 class CompoundLiteral(NamedTuple):
     ctype: CType
     value: Initializer
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Assign(NamedTuple):
     target: Expr
     value: Expr
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Binary(NamedTuple):
     op: str
     left: Expr
     right: Expr
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Unary(NamedTuple):
     op: str
     value: Expr
+    expr_type: CType | None = None
     span: Span | None = None
 
 class IncDec(NamedTuple):
     op: str
     value: Expr
     is_postfix: bool
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Call(NamedTuple):
     func: Expr
     args: list[Expr]
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Member(NamedTuple):
     value: Expr
     name: Identifier
     through_pointer: bool
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Conditional(NamedTuple):
     cond: Expr
     then: Expr
     otherwise: Expr
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Cast(NamedTuple):
     target_type: CType
     value: Expr
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Sizeof(NamedTuple):
     value: Expr | CType
+    expr_type: CType | None = None
     span: Span | None = None
 
 class IntLiteral(NamedTuple):
     value: int
+    expr_type: CType | None = None
     span: Span | None = None
 
 class BoolLiteral(NamedTuple):
     value: bool
+    expr_type: CType | None = None
     span: Span | None = None
 
 class FloatLiteral(NamedTuple):
     value: float
+    expr_type: CType | None = None
     span: Span | None = None
 
 class CharLiteral(NamedTuple):
     value: str
+    expr_type: CType | None = None
     span: Span | None = None
 
 class StringLiteral(NamedTuple):
     value: str
+    expr_type: CType | None = None
     span: Span | None = None
 
 class Identifier(NamedTuple):
     name: str
+    expr_type: CType | None = None
     span: Span | None = None
 
 class InitList(NamedTuple):

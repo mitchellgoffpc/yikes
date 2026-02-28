@@ -15,7 +15,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
     def ident(tok: Token) -> AST.Identifier:
         assert tok.kind == TokenKind.IDENT
         assert isinstance(tok.value, str)
-        return AST.Identifier(tok.value, span(tok))
+        return AST.Identifier(tok.value, span=span(tok))
 
     def span(tok: Token) -> AST.Span | None:
         if not with_spans:
