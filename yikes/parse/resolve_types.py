@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import NoReturn
-
 from yikes.parse import ast as AST  # noqa: N812
-from yikes.parse.helpers import const_eval
+from yikes.parse.helpers import const_eval, error, is_complete, is_void, lookup_ident
 
 
 def resolve_types(program: AST.Program) -> AST.Program:
@@ -97,9 +95,9 @@ def _resolve_type_def(node: AST.TypeDef, scopes: list[AST.Scope]) -> AST.TypeDef
 def _resolve_function_def(node: AST.FunctionDef, scopes: list[AST.Scope]) -> AST.FunctionDef:
     resolved_ctype = _resolve_ctype(node.ctype, scopes)
     if not isinstance(resolved_ctype, AST.FunctionType):
-        _error(node.name.span, "Function type required")
+        error(node.name.span, "Function type required")
     if isinstance(resolved_ctype.return_type, (AST.ArrayType, AST.FunctionType)):
-        _error(node.name.span, "Function cannot return array or function type")
+        error(node.name.span, "Function cannot return array or function type")
     scopes[-1].idents[node.name.name].ctype = resolved_ctype
     function_scopes = [*scopes, node.body.scope]
     for param in resolved_ctype.params:
@@ -146,8 +144,8 @@ def _resolve_enumerator(enumerator: AST.Enumerator, scopes: list[AST.Scope]) -> 
 def _resolve_field(field: AST.Field, scopes: list[AST.Scope]) -> AST.Field:
     bit_width = _resolve_const_int(field.bit_width, scopes, "Bit-field width is not a constant expression")
     ctype = _resolve_ctype(field.ctype, scopes)
-    if isinstance(ctype, AST.FunctionType) or _is_void(ctype) or not _is_complete(ctype):
-        _error(field.span, "Invalid field type")
+    if isinstance(ctype, AST.FunctionType) or is_void(ctype) or not is_complete(ctype):
+        error(field.span, "Invalid field type")
     return AST.Field(field.name, ctype, bit_width)
 
 
@@ -170,7 +168,7 @@ def _resolve_ctype(ctype: AST.CType, scopes: list[AST.Scope], seen: set[str] | N
                 ctype.variadic,
             )
             if isinstance(resolved.return_type, (AST.ArrayType, AST.FunctionType)):
-                _error(ctype.span, "Function cannot return array or function type")
+                error(ctype.span, "Function cannot return array or function type")
             return resolved
         case AST.StructType() | AST.UnionType() | AST.EnumType():
             return _resolve_tag_type(ctype, scopes)
@@ -182,12 +180,12 @@ def _resolve_named_type(name: AST.Identifier, scopes: list[AST.Scope], seen: set
     if seen is None:
         seen = set()
     if name.name in seen:
-        _error(name.span, f"Typedef cycle for '{name.name}'")
+        error(name.span, f"Typedef cycle for '{name.name}'")
     seen.add(name.name)
-    match _lookup_ident(scopes, name.name):
+    match lookup_ident(scopes, name.name):
         case AST.Symbol(kind=AST.SymbolKind.TYPEDEF, ctype=ctype) if ctype:
             return _resolve_ctype(ctype, scopes, seen)
-    _error(name.span, f"Unknown type name '{name.name}'")
+    error(name.span, f"Unknown type name '{name.name}'")
 
 
 def _resolve_tag_type(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> AST.CType:
@@ -262,36 +260,6 @@ def _resolve_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
     raise TypeError(f"Unknown expr: {type(expr).__name__}")
 
 
-def _is_void(ctype: AST.CType) -> bool:
-    return isinstance(ctype, AST.BuiltinType) and any(kw.name == "void" for kw in ctype.keywords)
-
-
-def _is_complete(ctype: AST.CType) -> bool:
-    match ctype:
-        case AST.BuiltinType():
-            return not _is_void(ctype)
-        case AST.PointerType():
-            return True
-        case AST.ArrayType(base=base, size=size):
-            return size is not None and _is_complete(base)
-        case AST.FunctionType():
-            return False
-        case AST.StructType(fields=fields) | AST.UnionType(fields=fields):
-            return fields is not None and all(_is_complete(field.ctype) for field in fields)
-        case AST.EnumType():
-            return True
-        case AST.NamedType():
-            return False
-    return False
-
-
-def _lookup_ident(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
-    for scope in reversed(scopes):
-        if symbol := scope.idents.get(name):
-            return symbol
-    return None
-
-
 def _lookup_tag(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
     for scope in reversed(scopes):
         if symbol := scope.tags.get(name):
@@ -305,10 +273,5 @@ def _resolve_const_int(expr: AST.Expr | None, scopes: list[AST.Scope], error_mes
     resolved = _resolve_expr(expr, scopes)
     value = const_eval(resolved)
     if value is None:
-        _error(resolved.span, error_message)
+        error(resolved.span, error_message)
     return AST.IntLiteral(value, span=resolved.span)
-
-
-def _error(span: AST.Span | None, message: str) -> NoReturn:
-    assert span is not None
-    raise ValueError(f"{message} at {span.start.line}:{span.start.col}")
