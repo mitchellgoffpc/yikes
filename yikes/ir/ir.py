@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import NamedTuple
 
@@ -136,10 +137,6 @@ class Cast(NamedTuple):
     value: Operand
     target_type: Type
 
-class Phi(NamedTuple):
-    result: Value
-    incomings: list[tuple[str, Operand]]
-
 class Select(NamedTuple):
     result: Value
     cond: Operand
@@ -170,20 +167,20 @@ class Call(NamedTuple):
     args: list[Operand]
 
 class Br(NamedTuple):
-    target: str
+    target: BasicBlock
 
 class CondBr(NamedTuple):
     cond: Operand
-    then_target: str
-    otherwise_target: str
+    then_target: BasicBlock
+    otherwise_target: BasicBlock
 
 class SwitchCase(NamedTuple):
     value: Constant
-    target: str
+    target: BasicBlock
 
 class Switch(NamedTuple):
     value: Operand
-    default: str
+    default: BasicBlock
     cases: list[SwitchCase]
 
 class Ret(NamedTuple):
@@ -191,12 +188,6 @@ class Ret(NamedTuple):
 
 class Unreachable(NamedTuple):
     pass
-
-class BasicBlock(NamedTuple):
-    name: str
-    phis: list[Phi]
-    instrs: list[Instr]
-    term: Terminator | None
 
 class Function(NamedTuple):
     name: str
@@ -207,6 +198,19 @@ class Function(NamedTuple):
 class Module(NamedTuple):
     globals: list[Global]
     functions: list[Function]
+
+
+@dataclass
+class Phi:
+    result: Value
+    incomings: list[tuple[BasicBlock, Operand]] = field(default_factory=list)
+
+@dataclass
+class BasicBlock:
+    name: str
+    phis: list[Phi] = field(default_factory=list)
+    instrs: list[Instr] = field(default_factory=list)
+    term: Terminator | None = None
 
 
 Type = VoidType | IntType | FloatType | PointerType | ArrayType | StructType | UnionType | FunctionType
