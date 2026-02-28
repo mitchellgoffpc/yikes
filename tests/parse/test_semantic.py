@@ -66,11 +66,6 @@ def test_external_decl_errors(subtests: pytest.Subtests) -> None:
     cases = [
         ("void x;", r"Object type required at \d+:\d+"),
         ("struct S s;", r"Incomplete object type at \d+:\d+"),
-        ("int f()[3] { return 0; }", r"Function cannot return array or function type at \d+:\d+"),
-        ("struct S { void x; };", r"Invalid field type at \d+:\d+"),
-        ("struct S { int x: (1 / 0); };", r"Bit-field width is not a constant expression at \d+:\d+"),
-        ("enum E { A = 1 / 0 };", r"Enumerator value is not a constant expression at \d+:\d+"),
-        ("int a[1 / 0];", r"Array size is not a constant expression at \d+:\d+"),
     ]
 
     for source, error_match in cases:

@@ -77,12 +77,12 @@ def test_program_decls(subtests: pytest.Subtests) -> None:
              AST.VarDecl(_id("x"), AST.PointerType(AST.NamedType(_id("T"))), None),
          ])),
         ("_Bool b;", _program([AST.VarDecl(_id("b"), _bt("_Bool"), None)])),
-        ("struct S s; union U u; enum E e;",
-         _program([
-             AST.VarDecl(_id("s"), AST.StructType(_id("S"), None), None),
-             AST.VarDecl(_id("u"), AST.UnionType(_id("U"), None), None),
-             AST.VarDecl(_id("e"), AST.EnumType(_id("E"), None), None),
-         ])),
+        ("struct S s;", _program([AST.VarDecl(_id("s"), AST.StructType(_id("S"), None), None)])),
+        ("union U u;", _program([AST.VarDecl(_id("u"), AST.UnionType(_id("U"), None), None)])),
+        ("enum E e;", _program([AST.VarDecl(_id("e"), AST.EnumType(_id("E"), None), None)])),
+        ("struct S;", _program([AST.StructDef(_id("S"), [], AST.StructType(_id("S"), None))])),
+        ("union U;", _program([AST.UnionDef(_id("U"), [], AST.UnionType(_id("U"), None))])),
+        ("enum E;", _program([AST.EnumDef(_id("E"), [], AST.EnumType(_id("E"), None))])),
         ("int *p; int f(int);",
          _program([
              AST.VarDecl(_id("p"), AST.PointerType(_bt("int")), None),

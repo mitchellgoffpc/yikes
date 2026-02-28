@@ -883,11 +883,17 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
     def extract_tag_def(specs: AST.DeclSpecs) -> AST.StructDef | AST.UnionDef | AST.EnumDef | None:
         match specs.ctype:
-            case AST.StructType(fields=[*_], name=name, span=type_span):
+            case AST.StructType(fields=fields, name=name, span=type_span) if fields is not None:
                 return AST.StructDef(name, specs.specs, specs.ctype, span=type_span)
-            case AST.UnionType(fields=[*_], name=name, span=type_span):
+            case AST.StructType(fields=None, name=name, span=type_span) if name:
+                return AST.StructDef(name, specs.specs, specs.ctype, span=type_span)
+            case AST.UnionType(fields=fields, name=name, span=type_span) if fields is not None:
                 return AST.UnionDef(name, specs.specs, specs.ctype, span=type_span)
-            case AST.EnumType(values=[*_], name=name, span=type_span):
+            case AST.UnionType(fields=None, name=name, span=type_span) if name:
+                return AST.UnionDef(name, specs.specs, specs.ctype, span=type_span)
+            case AST.EnumType(values=values, name=name, span=type_span) if values is not None:
+                return AST.EnumDef(name, specs.specs, specs.ctype, span=type_span)
+            case AST.EnumType(values=None, name=name, span=type_span) if name:
                 return AST.EnumDef(name, specs.specs, specs.ctype, span=type_span)
         return None
 
