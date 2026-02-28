@@ -1,6 +1,6 @@
 # Project
 
-yikes is a simple C compiler written in Python.
+yikes is a simple C compiler written in Python, targeting C99.
 
 # Contributing
 
