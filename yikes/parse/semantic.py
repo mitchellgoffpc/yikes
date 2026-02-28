@@ -26,23 +26,15 @@ def semantic(program: AST.Program) -> AST.Program:
     return program._replace(items=items)
 
 
-def _expr_type(expr: AST.Expr) -> AST.CType:
-    if expr.expr_type is None:
-        _error(expr.span, "Expression type missing")
-    assert expr.expr_type is not None
-    return expr.expr_type
-
-
 def _check_external_decl(node: AST.ExternalDecl, scopes: list[AST.Scope]) -> AST.ExternalDecl:
     match node:
         case AST.FunctionDef():
             ctype = _check_type(node.ctype, scopes)
             _update_symbol_ctype(scopes[-1], node.name, ctype)
-            assert isinstance(ctype, AST.FunctionType)
-            _ensure_function_type(ctype, node.name.span)
-            ctx = FuncContext(ctype.return_type, node.scope)
+            func_type = _ensure_function_type(ctype, node.name.span)
+            ctx = FuncContext(func_type.return_type, node.scope)
             body = _check_block(node.body, scopes, ctx)
-            return node._replace(ctype=ctype, body=body)
+            return node._replace(ctype=func_type, body=body)
         case AST.VarDecl():
             ctype = _check_type(node.ctype, scopes)
             _ensure_object_type(ctype, node.name.span)
@@ -54,19 +46,15 @@ def _check_external_decl(node: AST.ExternalDecl, scopes: list[AST.Scope]) -> AST
             _update_symbol_ctype(scopes[-1], node.name, ctype)
             return node._replace(ctype=ctype)
         case AST.StructDef():
-            ctype = _check_tag_def(node.ctype, scopes)
-            assert isinstance(ctype, AST.StructType)
+            ctype = _check_struct_def(node.ctype, scopes)
             return node._replace(ctype=ctype)
         case AST.UnionDef():
-            ctype = _check_tag_def(node.ctype, scopes)
-            assert isinstance(ctype, AST.UnionType)
+            ctype = _check_union_def(node.ctype, scopes)
             return node._replace(ctype=ctype)
         case AST.EnumDef():
-            ctype = _check_tag_def(node.ctype, scopes)
-            assert isinstance(ctype, AST.EnumType)
+            ctype = _check_enum_def(node.ctype, scopes)
             return node._replace(ctype=ctype)
-        case _:
-            raise TypeError(f"Unknown external decl: {type(node).__name__}")
+    raise TypeError(f"Unknown external decl: {type(node).__name__}")
 
 
 def _check_stmt(node: AST.Stmt, scopes: list[AST.Scope], ctx: FuncContext) -> AST.Stmt:
@@ -84,16 +72,13 @@ def _check_stmt(node: AST.Stmt, scopes: list[AST.Scope], ctx: FuncContext) -> AS
             _update_symbol_ctype(scopes[-1], node.name, ctype)
             return node._replace(ctype=ctype)
         case AST.StructDef():
-            ctype = _check_tag_def(node.ctype, scopes)
-            assert isinstance(ctype, AST.StructType)
+            ctype = _check_struct_def(node.ctype, scopes)
             return node._replace(ctype=ctype)
         case AST.UnionDef():
-            ctype = _check_tag_def(node.ctype, scopes)
-            assert isinstance(ctype, AST.UnionType)
+            ctype = _check_union_def(node.ctype, scopes)
             return node._replace(ctype=ctype)
         case AST.EnumDef():
-            ctype = _check_tag_def(node.ctype, scopes)
-            assert isinstance(ctype, AST.EnumType)
+            ctype = _check_enum_def(node.ctype, scopes)
             return node._replace(ctype=ctype)
         case AST.ExprStmt(expr=expr):
             expr = _check_expr(expr, scopes) if expr else None
@@ -164,8 +149,7 @@ def _check_stmt(node: AST.Stmt, scopes: list[AST.Scope], ctx: FuncContext) -> AS
         case AST.Goto(target=target):
             _ensure_goto_target(ctx.label_scope, target)
             return node
-        case _:
-            raise TypeError(f"Unknown stmt: {type(node).__name__}")
+    raise TypeError(f"Unknown stmt: {type(node).__name__}")
 
 
 def _check_block(block: AST.Block, scopes: list[AST.Scope], ctx: FuncContext, *, use_existing: bool = False) -> AST.Block:
@@ -212,7 +196,7 @@ def _check_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
             return expr._replace(left=left, right=right, expr_type=expr_type)
         case AST.Unary(op=op, value=value):
             value = _check_expr(value, scopes)
-            expr_type, is_lvalue = _unary_type(op, value, expr.span)
+            expr_type, _ = _unary_type(op, value, expr.span)
             return expr._replace(value=value, expr_type=expr_type)
         case AST.IncDec(op=op, value=value):
             value = _check_expr(value, scopes)
@@ -240,21 +224,191 @@ def _check_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
             value = _check_expr(value, scopes)
             _ensure_castable(target_type, expr.span)
             return expr._replace(target_type=target_type, value=value, expr_type=target_type)
+        case AST.Sizeof(value=value) if isinstance(value, AST.CType):
+            value = _check_type(value, scopes)
+            _ensure_sizeof_type(value, expr.span)
+            return expr._replace(value=value, expr_type=_int_type())
         case AST.Sizeof(value=value):
-            if isinstance(value, AST.Expr):
-                value = _check_expr(value, scopes)
-                _ensure_sizeof_type(_expr_type(value), value.span)
-            else:
-                value = _check_type(value, scopes)
-                _ensure_sizeof_type(value, expr.span)
+            value = _check_expr(value, scopes)
+            _ensure_sizeof_type(_expr_type(value), value.span)
             return expr._replace(value=value, expr_type=_int_type())
         case AST.CompoundLiteral(ctype=ctype, value=value):
             ctype = _check_type(ctype, scopes)
             _ensure_object_type(ctype, expr.span)
             value = _check_initializer(value, ctype, scopes)
             return expr._replace(ctype=ctype, value=value, expr_type=ctype)
-        case _:
-            raise TypeError(f"Unknown expr: {type(expr).__name__}")
+    raise TypeError(f"Unknown expr: {type(expr).__name__}")
+
+
+def _check_initializer(init: AST.Initializer, target: AST.CType, scopes: list[AST.Scope]) -> AST.Initializer:
+    if isinstance(init, AST.InitList):
+        match target:
+            case AST.ArrayType():
+                items = _check_init_list_array(init, target, scopes)
+                return init._replace(items=items)
+            case AST.StructType() | AST.UnionType():
+                items = _check_init_list_struct(init, target, scopes)
+                return init._replace(items=items)
+        _error(init.span, "Initializer list used for non-aggregate type")
+    expr = _check_expr(init, scopes)
+    _ensure_assignable(target, expr, _expr_type(expr), expr.span)
+    return expr
+
+
+def _check_init_list_array(init: AST.InitList, target: AST.ArrayType, scopes: list[AST.Scope]) -> list[AST.InitializerItem]:
+    items: list[AST.InitializerItem] = []
+    for item in init.items:
+        designators = [_check_designator(d, scopes) for d in item.designators]
+        value = _check_initializer(item.value, target.base, scopes)
+        items.append(item._replace(designators=designators, value=value))
+    return items
+
+
+def _check_init_list_struct(init: AST.InitList, target: AST.StructType | AST.UnionType, scopes: list[AST.Scope]) -> list[AST.InitializerItem]:
+    if target.fields is None:
+        _error(init.span, "Initializer for incomplete type")
+    field_iter = iter(target.fields or [])
+    items: list[AST.InitializerItem] = []
+    for item in init.items:
+        designators = [_check_designator(d, scopes) for d in item.designators]
+        field = _designated_field(target, designators[0]) if designators else next(field_iter, None)
+        if field is None:
+            _error(item.span, "Too many initializers")
+        assert field is not None
+        value = _check_initializer(item.value, field.ctype, scopes)
+        items.append(item._replace(designators=designators, value=value))
+    return items
+
+
+def _check_designator(designator: AST.Designator, scopes: list[AST.Scope]) -> AST.Designator:
+    if designator.index:
+        index = _check_expr(designator.index, scopes)
+        _ensure_integer(_expr_type(index), index.span)
+        if _const_eval(index) is None:
+            _error(index.span, "Array designator is not a constant expression")
+        return designator._replace(index=index)
+    return designator
+
+
+def _designated_field(target: AST.StructType | AST.UnionType, designator: AST.Designator) -> AST.Field | None:
+    if designator.field is None:
+        return None
+    for struct_field in target.fields or []:
+        if struct_field.name and struct_field.name.name == designator.field.name:
+            return struct_field
+    _error(designator.span, f"Unknown field '{designator.field.name}'")
+    return None
+
+
+def _check_struct_def(ctype: AST.StructType, scopes: list[AST.Scope]) -> AST.StructType:
+    match ctype:
+        case AST.StructType(name=name, fields=[*fields]):
+            fields = [_check_field(field, scopes) for field in fields]
+            updated = AST.StructType(name, fields)
+            _update_tag_ctype(scopes[-1], name, updated)
+            return updated
+        case AST.StructType():
+            return ctype
+
+
+def _check_union_def(ctype: AST.UnionType, scopes: list[AST.Scope]) -> AST.UnionType:
+    match ctype:
+        case AST.UnionType(name=name, fields=[*fields]):
+            fields = [_check_field(field, scopes) for field in fields]
+            updated = AST.UnionType(name, fields)
+            _update_tag_ctype(scopes[-1], name, updated)
+            return updated
+        case AST.UnionType():
+            return ctype
+
+
+def _check_enum_def(ctype: AST.EnumType, scopes: list[AST.Scope]) -> AST.EnumType:
+    match ctype:
+        case AST.EnumType(name=name, values=[*values]):
+            values = [_check_enumerator(value, scopes) for value in values]
+            updated = AST.EnumType(name, values)
+            _update_tag_ctype(scopes[-1], name, updated)
+            return updated
+        case AST.EnumType():
+            return ctype
+
+
+def _check_field(field: AST.Field, scopes: list[AST.Scope]) -> AST.Field:
+    ctype = _check_type(field.ctype, scopes)
+    _ensure_field_type(ctype, field.span)
+    bit_width = field.bit_width
+    if bit_width is not None:
+        bit_width = _check_expr(bit_width, scopes)
+        _ensure_integer(_expr_type(bit_width), bit_width.span)
+        if _const_eval(bit_width) is None:
+            _error(bit_width.span, "Bit-field width is not a constant expression")
+    return field._replace(ctype=ctype, bit_width=bit_width)
+
+
+def _check_enumerator(value: AST.Enumerator, scopes: list[AST.Scope]) -> AST.Enumerator:
+    expr = value.value
+    if expr is None:
+        return value
+    expr = _check_expr(expr, scopes)
+    _ensure_integer(_expr_type(expr), expr.span)
+    if _const_eval(expr) is None:
+        _error(expr.span, "Enumerator value is not a constant expression")
+    return value._replace(value=expr)
+
+
+def _check_type(ctype: AST.CType, scopes: list[AST.Scope]) -> AST.CType:
+    match ctype:
+        case AST.BuiltinType():
+            return ctype
+        case AST.NamedType(name=name):
+            symbol = _lookup_ident(scopes, name.name)
+            if symbol and symbol.kind == AST.SymbolKind.TYPEDEF and symbol.ctype:
+                return symbol.ctype
+            _error(name.span, f"Unknown type name '{name.name}'")
+        case AST.PointerType(base=base):
+            return ctype._replace(base=_check_type(base, scopes))
+        case AST.ArrayType(base=base, size=size):
+            base = _check_type(base, scopes)
+            if size is not None:
+                size = _check_expr(size, scopes)
+                _ensure_integer(_expr_type(size), size.span)
+                if _const_eval(size) is None:
+                    _error(size.span, "Array size is not a constant expression")
+            return ctype._replace(base=base, size=size)
+        case AST.FunctionType(return_type=return_type, params=params, variadic=variadic):
+            return_type = _check_type(return_type, scopes)
+            params = [param._replace(ctype=_check_type(param.ctype, scopes)) for param in params]
+            return AST.FunctionType(return_type, params, variadic)
+        case AST.StructType(name=name, fields=[*fields]):
+            fields = [_check_field(field, scopes) for field in fields]
+            updated = AST.StructType(name, fields)
+            if name:
+                _update_tag_ctype(scopes[-1], name, updated)
+            return updated
+        case AST.UnionType(name=name, fields=[*fields]):
+            fields = [_check_field(field, scopes) for field in fields]
+            updated = AST.UnionType(name, fields)
+            if name:
+                _update_tag_ctype(scopes[-1], name, updated)
+            return updated
+        case AST.EnumType(name=name, values=[*values]):
+            values = [_check_enumerator(value, scopes) for value in values]
+            updated = AST.EnumType(name, values)
+            if name:
+                _update_tag_ctype(scopes[-1], name, updated)
+            return updated
+        case AST.StructType(name=name, fields=None) | AST.UnionType(name=name, fields=None) | AST.EnumType(name=name, values=None):
+            if (symbol := _lookup_tag(scopes, name.name)) and symbol.ctype:
+                return symbol.ctype
+            return ctype
+    raise TypeError(f"Unknown ctype: {type(ctype).__name__}")
+
+
+def _expr_type(expr: AST.Expr) -> AST.CType:
+    if expr.expr_type is None:
+        _error(expr.span, "Expression type missing")
+    assert expr.expr_type is not None
+    return expr.expr_type
 
 
 def _binary_type(op: str, left: AST.Expr, right: AST.Expr, span: AST.Span | None) -> AST.CType:
@@ -314,7 +468,6 @@ def _call_type(func: AST.Expr, args: list[AST.Expr], span: AST.Span | None) -> A
         func_type = func_type.base
     if not isinstance(func_type, AST.FunctionType):
         _error(span, "Called object is not a function")
-    assert isinstance(func_type, AST.FunctionType)
     if func_type.variadic:
         if len(args) < len(func_type.params):
             _error(span, "Not enough arguments for variadic function")
@@ -332,11 +485,9 @@ def _member_type(value: AST.Expr, name: AST.Identifier, through_pointer: bool, s
         rvalue = _rvalue_type(ctype)
         if not isinstance(rvalue, AST.PointerType):
             _error(span, "Member access through non-pointer")
-        assert isinstance(rvalue, AST.PointerType)
         ctype = rvalue.base
     if not isinstance(ctype, AST.StructType | AST.UnionType):
         _error(span, "Member access on non-struct/union")
-    assert isinstance(ctype, AST.StructType | AST.UnionType)
     if ctype.fields is None:
         _error(span, "Member access on incomplete type")
     assert ctype.fields is not None
@@ -350,7 +501,7 @@ def _member_type(value: AST.Expr, name: AST.Identifier, through_pointer: bool, s
 def _conditional_type(then: AST.Expr, otherwise: AST.Expr, span: AST.Span | None) -> AST.CType:
     then_type = _rvalue_type(_expr_type(then))
     otherwise_type = _rvalue_type(_expr_type(otherwise))
-    if _same_type(then_type, otherwise_type):
+    if _type_key(then_type) == _type_key(otherwise_type):
         return then_type
     if _is_arithmetic(then_type) and _is_arithmetic(otherwise_type):
         return _usual_arithmetic(then_type, otherwise_type)
@@ -364,161 +515,46 @@ def _conditional_type(then: AST.Expr, otherwise: AST.Expr, span: AST.Span | None
     return then_type
 
 
-def _check_initializer(init: AST.Initializer, target: AST.CType, scopes: list[AST.Scope]) -> AST.Initializer:
-    if isinstance(init, AST.Expr):
-        expr = _check_expr(init, scopes)
-        _ensure_assignable(target, expr, _expr_type(expr), expr.span)
-        return expr
-    if isinstance(init, AST.CompoundLiteral):
-        expr = _check_expr(init, scopes)
-        _ensure_assignable(target, expr, _expr_type(expr), expr.span)
-        return expr
-    if not isinstance(init, AST.InitList):
-        return init
-    if isinstance(target, AST.ArrayType):
-        items = _check_init_list_array(init, target, scopes)
-        return init._replace(items=items)
-    if isinstance(target, AST.StructType | AST.UnionType):
-        items = _check_init_list_struct(init, target, scopes)
-        return init._replace(items=items)
-    _error(init.span, "Initializer list used for non-aggregate type")
-    return init
+def _add_sub_type(op: str, left: AST.Expr, right: AST.Expr, span: AST.Span | None) -> AST.CType:
+    left_type = _rvalue_type(_expr_type(left))
+    right_type = _rvalue_type(_expr_type(right))
+    if _is_pointer(left_type) and _is_integer(right_type):
+        return left_type
+    if _is_integer(left_type) and _is_pointer(right_type) and op == "+":
+        return right_type
+    if _is_pointer(left_type) and _is_pointer(right_type) and op == "-":
+        if _compatible_pointer(left_type, right_type):
+            return _int_type()
+        _error(span, "Pointer subtraction with incompatible types")
+    _ensure_arithmetic(left_type, left.span)
+    _ensure_arithmetic(right_type, right.span)
+    return _usual_arithmetic(left_type, right_type)
 
 
-def _check_init_list_array(init: AST.InitList, target: AST.ArrayType, scopes: list[AST.Scope]) -> list[AST.InitializerItem]:
-    items: list[AST.InitializerItem] = []
-    for item in init.items:
-        designators = [_check_designator(d, scopes) for d in item.designators]
-        value = _check_initializer(item.value, target.base, scopes)
-        items.append(item._replace(designators=designators, value=value))
-    return items
-
-
-def _check_init_list_struct(init: AST.InitList, target: AST.StructType | AST.UnionType, scopes: list[AST.Scope]) -> list[AST.InitializerItem]:
-    if target.fields is None:
-        _error(init.span, "Initializer for incomplete type")
-    field_iter = iter(target.fields or [])
-    items: list[AST.InitializerItem] = []
-    for item in init.items:
-        designators = [_check_designator(d, scopes) for d in item.designators]
-        field = _designated_field(target, designators[0]) if designators else next(field_iter, None)
-        if field is None:
-            _error(item.span, "Too many initializers")
-        assert field is not None
-        value = _check_initializer(item.value, field.ctype, scopes)
-        items.append(item._replace(designators=designators, value=value))
-    return items
-
-
-def _check_designator(designator: AST.Designator, scopes: list[AST.Scope]) -> AST.Designator:
-    if designator.index:
-        index = _check_expr(designator.index, scopes)
-        _ensure_integer(_expr_type(index), index.span)
-        if _const_eval(index) is None:
-            _error(index.span, "Array designator is not a constant expression")
-        return designator._replace(index=index)
-    return designator
-
-
-def _designated_field(target: AST.StructType | AST.UnionType, designator: AST.Designator) -> AST.Field | None:
-    if designator.field is None:
-        return None
-    for struct_field in target.fields or []:
-        if struct_field.name and struct_field.name.name == designator.field.name:
-            return struct_field
-    _error(designator.span, f"Unknown field '{designator.field.name}'")
-    return None
-
-
-def _check_tag_def(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> AST.CType:
-    match ctype:
-        case AST.StructType(name=name, fields=[*fields]):
-            fields = [_check_field(field, scopes) for field in fields]
-            updated = AST.StructType(name, fields)
-            _update_tag_ctype(scopes[-1], name, updated)
-            return updated
-        case AST.UnionType(name=name, fields=[*fields]):
-            fields = [_check_field(field, scopes) for field in fields]
-            updated = AST.UnionType(name, fields)
-            _update_tag_ctype(scopes[-1], name, updated)
-            return updated
-        case AST.EnumType(name=name, values=[*values]):
-            values = [_check_enumerator(value, scopes) for value in values]
-            updated = AST.EnumType(name, values)
-            _update_tag_ctype(scopes[-1], name, updated)
-            return updated
-        case _:
-            return ctype
-
-
-def _check_field(field: AST.Field, scopes: list[AST.Scope]) -> AST.Field:
-    ctype = _check_type(field.ctype, scopes)
-    _ensure_field_type(ctype, field.span)
-    bit_width = field.bit_width
-    if bit_width is not None:
-        bit_width = _check_expr(bit_width, scopes)
-        _ensure_integer(_expr_type(bit_width), bit_width.span)
-        if _const_eval(bit_width) is None:
-            _error(bit_width.span, "Bit-field width is not a constant expression")
-    return field._replace(ctype=ctype, bit_width=bit_width)
-
-
-def _check_enumerator(value: AST.Enumerator, scopes: list[AST.Scope]) -> AST.Enumerator:
-    expr = value.value
-    if expr is None:
-        return value
-    expr = _check_expr(expr, scopes)
-    _ensure_integer(_expr_type(expr), expr.span)
-    if _const_eval(expr) is None:
-        _error(expr.span, "Enumerator value is not a constant expression")
-    return value._replace(value=expr)
-
-
-def _check_type(ctype: AST.CType, scopes: list[AST.Scope]) -> AST.CType:
-    match ctype:
-        case AST.BuiltinType():
-            return ctype
-        case AST.NamedType(name=name):
-            symbol = _lookup_ident(scopes, name.name)
-            if symbol and symbol.kind == AST.SymbolKind.TYPEDEF and symbol.ctype:
-                return symbol.ctype
-            _error(name.span, f"Unknown type name '{name.name}'")
+def _deref_type(ctype: AST.CType, span: AST.Span | None) -> AST.CType:
+    match _rvalue_type(ctype):
         case AST.PointerType(base=base):
-            return ctype._replace(base=_check_type(base, scopes))
-        case AST.ArrayType(base=base, size=size):
-            base = _check_type(base, scopes)
-            if size is not None:
-                size = _check_expr(size, scopes)
-                _ensure_integer(_expr_type(size), size.span)
-                if _const_eval(size) is None:
-                    _error(size.span, "Array size is not a constant expression")
-            return ctype._replace(base=base, size=size)
-        case AST.FunctionType(return_type=return_type, params=params, variadic=variadic):
-            return_type = _check_type(return_type, scopes)
-            params = [param._replace(ctype=_check_type(param.ctype, scopes)) for param in params]
-            return AST.FunctionType(return_type, params, variadic)
-        case AST.StructType(name=name, fields=[*fields]):
-            fields = [_check_field(field, scopes) for field in fields]
-            updated = AST.StructType(name, fields)
-            if name:
-                _update_tag_ctype(scopes[-1], name, updated)
-            return updated
-        case AST.StructType(fields=None) | AST.UnionType(fields=None) | AST.EnumType(values=None):
-            return ctype
-        case AST.UnionType(name=name, fields=[*fields]):
-            fields = [_check_field(field, scopes) for field in fields]
-            updated = AST.UnionType(name, fields)
-            if name:
-                _update_tag_ctype(scopes[-1], name, updated)
-            return updated
-        case AST.EnumType(name=name, values=[*values]):
-            values = [_check_enumerator(value, scopes) for value in values]
-            updated = AST.EnumType(name, values)
-            if name:
-                _update_tag_ctype(scopes[-1], name, updated)
-            return updated
-        case _:
-            raise TypeError(f"Unknown ctype: {type(ctype).__name__}")
+            return base
+    _error(span, "Cannot dereference non-pointer")
+    return _int_type()
+
+
+def _param_type(ctype: AST.CType) -> AST.CType:
+    match ctype:
+        case AST.ArrayType(base=base):
+            return AST.PointerType(base)
+        case AST.FunctionType():
+            return AST.PointerType(ctype)
+    return ctype
+
+
+def _rvalue_type(ctype: AST.CType) -> AST.CType:
+    match ctype:
+        case AST.ArrayType(base=base):
+            return AST.PointerType(base)
+        case AST.FunctionType():
+            return AST.PointerType(ctype)
+    return ctype
 
 
 def _ensure_object_type(ctype: AST.CType, span: AST.Span | None) -> None:
@@ -528,9 +564,14 @@ def _ensure_object_type(ctype: AST.CType, span: AST.Span | None) -> None:
         _error(span, "Incomplete object type")
 
 
-def _ensure_function_type(ctype: AST.FunctionType, span: AST.Span | None) -> None:
-    if _is_array(ctype.return_type) or _is_function(ctype.return_type):
-        _error(span, "Function cannot return array or function type")
+def _ensure_function_type(ctype: AST.CType, span: AST.Span | None) -> AST.FunctionType:
+    match ctype:
+        case AST.FunctionType():
+            if _is_array(ctype.return_type) or _is_function(ctype.return_type):
+                _error(span, "Function cannot return array or function type")
+            return ctype
+    _error(span, "Function type required")
+    return AST.FunctionType(_int_type(), [], False)
 
 
 def _ensure_field_type(ctype: AST.CType, span: AST.Span | None) -> None:
@@ -553,12 +594,12 @@ def _ensure_assignable(target: AST.CType, value: AST.Expr, value_type: AST.CType
 def _ensure_castable(ctype: AST.CType, span: AST.Span | None) -> None:
     if _is_function(ctype):
         _error(span, "Cannot cast to function type")
-    if _is_incomplete(ctype):
+    if not _is_complete(ctype):
         _error(span, "Cannot cast to incomplete type")
 
 
 def _ensure_sizeof_type(ctype: AST.CType, span: AST.Span | None) -> None:
-    if _is_function(ctype) or _is_incomplete(ctype):
+    if _is_function(ctype) or not _is_complete(ctype):
         _error(span, "Invalid sizeof operand")
 
 
@@ -603,55 +644,9 @@ def _ensure_comparable(left: AST.CType, right: AST.CType, span: AST.Span | None)
     _error(span, "Incompatible types for comparison")
 
 
-def _add_sub_type(op: str, left: AST.Expr, right: AST.Expr, span: AST.Span | None) -> AST.CType:
-    left_type = _rvalue_type(_expr_type(left))
-    right_type = _rvalue_type(_expr_type(right))
-    if _is_pointer(left_type) and _is_integer(right_type):
-        return left_type
-    if _is_integer(left_type) and _is_pointer(right_type) and op == "+":
-        return right_type
-    if _is_pointer(left_type) and _is_pointer(right_type) and op == "-":
-        if _compatible_pointer(left_type, right_type):
-            return _int_type()
-        _error(span, "Pointer subtraction with incompatible types")
-    _ensure_arithmetic(left_type, left.span)
-    _ensure_arithmetic(right_type, right.span)
-    return _usual_arithmetic(left_type, right_type)
-
-
-def _deref_type(ctype: AST.CType, span: AST.Span | None) -> AST.CType:
-    ctype = _rvalue_type(ctype)
-    if isinstance(ctype, AST.PointerType):
-        return ctype.base
-    _error(span, "Cannot dereference non-pointer")
-    return _int_type()
-
-
-def _param_type(ctype: AST.CType) -> AST.CType:
-    if isinstance(ctype, AST.ArrayType):
-        return AST.PointerType(ctype.base)
-    if isinstance(ctype, AST.FunctionType):
-        return AST.PointerType(ctype)
-    return ctype
-
-
-def _rvalue_type(ctype: AST.CType) -> AST.CType:
-    if isinstance(ctype, AST.ArrayType):
-        return AST.PointerType(ctype.base)
-    if isinstance(ctype, AST.FunctionType):
-        return AST.PointerType(ctype)
-    return ctype
-
-
 def _is_lvalue(expr: AST.Expr) -> bool:
     match expr:
-        case AST.Identifier():
-            return True
-        case AST.Member():
-            return True
-        case AST.Unary(op="*"):
-            return True
-        case AST.StringLiteral():
+        case AST.Identifier() | AST.Member() | AST.StringLiteral() | AST.Unary(op="*"):
             return True
     return False
 
@@ -661,19 +656,21 @@ def _is_null_constant(expr: AST.Expr) -> bool:
 
 
 def _is_integer(ctype: AST.CType) -> bool:
-    if isinstance(ctype, AST.EnumType):
-        return True
-    if not isinstance(ctype, AST.BuiltinType):
-        return False
-    names = {kw.name for kw in ctype.keywords}
-    return bool(names & {"bool", "char", "short", "int", "long", "signed", "unsigned"})
+    match ctype:
+        case AST.EnumType():
+            return True
+        case AST.BuiltinType(keywords=keywords):
+            names = {kw.name for kw in keywords}
+            return bool(names & {"bool", "char", "short", "int", "long", "signed", "unsigned"})
+    return False
 
 
 def _is_floating(ctype: AST.CType) -> bool:
-    if not isinstance(ctype, AST.BuiltinType):
-        return False
-    names = {kw.name for kw in ctype.keywords}
-    return bool(names & {"float", "double", "complex", "imaginary"})
+    match ctype:
+        case AST.BuiltinType(keywords=keywords):
+            names = {kw.name for kw in keywords}
+            return bool(names & {"float", "double", "complex", "imaginary"})
+    return False
 
 
 def _is_arithmetic(ctype: AST.CType) -> bool:
@@ -700,10 +697,6 @@ def _is_function(ctype: AST.CType) -> bool:
     return isinstance(ctype, AST.FunctionType)
 
 
-def _is_incomplete(ctype: AST.CType) -> bool:
-    return not _is_complete(ctype)
-
-
 def _is_complete(ctype: AST.CType) -> bool:
     match ctype:
         case AST.BuiltinType():
@@ -724,15 +717,10 @@ def _is_complete(ctype: AST.CType) -> bool:
 
 
 def _compatible_pointer(left: AST.CType, right: AST.CType) -> bool:
-    if not isinstance(left, AST.PointerType) or not isinstance(right, AST.PointerType):
-        return False
-    if _is_void(left.base) or _is_void(right.base):
-        return True
-    return _same_type(left.base, right.base)
-
-
-def _same_type(left: AST.CType, right: AST.CType) -> bool:
-    return _type_key(left) == _type_key(right)
+    match left, right:
+        case AST.PointerType(base=left_base), AST.PointerType(base=right_base):
+            return _is_void(left_base) or _is_void(right_base) or _type_key(left_base) == _type_key(right_base)
+    return False
 
 
 def _type_key(ctype: AST.CType) -> tuple:
@@ -763,10 +751,6 @@ def _usual_arithmetic(left: AST.CType, right: AST.CType) -> AST.CType:
             return _double_type()
         return _float_type()
     return _int_type()
-
-
-def _is_float_type(ctype: AST.CType) -> bool:
-    return isinstance(ctype, AST.BuiltinType) and any(kw.name == "float" for kw in ctype.keywords)
 
 
 def _is_double_type(ctype: AST.CType) -> bool:
@@ -864,6 +848,13 @@ def _const_eval(expr: AST.Expr | None) -> int | None:
 def _lookup_ident(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
     for scope in reversed(scopes):
         if symbol := scope.idents.get(name):
+            return symbol
+    return None
+
+
+def _lookup_tag(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
+    for scope in reversed(scopes):
+        if symbol := scope.tags.get(name):
             return symbol
     return None
 

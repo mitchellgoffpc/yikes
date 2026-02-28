@@ -47,6 +47,7 @@ def test_expression_types(subtests: pytest.Subtests) -> None:
         ("1 ? 2 : 3.0;", _bt("float")),
         ("int *p; p + 1;", AST.PointerType(_bt("int"))),
         ("int *p; int *q; p - q;", _bt("int")),
+        ("struct A { int x; }; struct A a; a.x;", _bt("int")),
     ]
 
     for body, expected in cases:
