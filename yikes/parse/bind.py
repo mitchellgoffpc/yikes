@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from yikes.parse import ast as AST  # noqa: N812
+from yikes.parse.helpers import error
 
 
 def bind(program: AST.Program) -> AST.Program:
@@ -68,9 +69,7 @@ def _bind_params(params: list[AST.Param], scope: AST.Scope) -> None:
 
 def _bind_ctype_defs(ctype: AST.CType, scope: AST.Scope, owner: AST.SymbolDecl | None) -> None:
     match ctype:
-        case AST.PointerType():
-            _bind_ctype_defs(ctype.base, scope, owner)
-        case AST.ArrayType():
+        case AST.PointerType() | AST.ArrayType():
             _bind_ctype_defs(ctype.base, scope, owner)
         case AST.FunctionType():
             _bind_ctype_defs(ctype.return_type, scope, owner)
@@ -87,10 +86,6 @@ def _bind_enumerators(scope: AST.Scope, values: list[AST.Enumerator]) -> None:
     for value in values:
         _add_ident(scope, AST.SymbolKind.ENUM_CONST, None, value)
 
-def _error(span: AST.Span | None, message: str) -> None:
-    assert span is not None, "Span is required for error reporting"
-    raise ValueError(f"{message} at {span.start.line}:{span.start.col}")
-
 def _has_tag_definition(ctype: AST.CType | None) -> bool:
     match ctype:
         case AST.StructType(fields=[*_]) | AST.UnionType(fields=[*_]) | AST.EnumType(values=[*_]):
@@ -100,18 +95,18 @@ def _has_tag_definition(ctype: AST.CType | None) -> bool:
 def _add_ident(scope: AST.Scope, kind: AST.SymbolKind, ctype: AST.CType | None, decl: AST.SymbolDecl) -> None:
     if decl.name:
         if decl.name.name in scope.idents:
-            _error(decl.name.span, f"Duplicate identifier '{decl.name.name}'")
+            error(decl.name.span, f"Duplicate identifier '{decl.name.name}'")
         scope.idents[decl.name.name] = AST.Symbol(decl.name.name, kind, ctype, decl)
 
 def _add_tag(scope: AST.Scope, ctype: AST.StructType | AST.UnionType | AST.EnumType, decl: AST.SymbolDecl | None) -> None:
     if ctype.name:
         existing = scope.tags.get(ctype.name.name)
         if existing and _has_tag_definition(ctype) and _has_tag_definition(existing.ctype):
-            _error(ctype.name.span, f"Duplicate tag '{ctype.name.name}'")
+            error(ctype.name.span, f"Duplicate tag '{ctype.name.name}'")
         if not existing:
             scope.tags[ctype.name.name] = AST.Symbol(ctype.name.name, AST.SymbolKind.TAG, ctype, decl)
 
 def _add_label(scope: AST.Scope, decl: AST.Label) -> None:
     if decl.name.name in scope.labels:
-        _error(decl.name.span, f"Duplicate label '{decl.name.name}'")
+        error(decl.name.span, f"Duplicate label '{decl.name.name}'")
     scope.labels[decl.name.name] = AST.Symbol(decl.name.name, AST.SymbolKind.LABEL, None, decl)

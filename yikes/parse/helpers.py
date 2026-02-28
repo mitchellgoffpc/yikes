@@ -89,6 +89,12 @@ def lookup_ident(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
             return symbol
     return None
 
+def lookup_tag(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
+    for scope in reversed(scopes):
+        if symbol := scope.tags.get(name):
+            return symbol
+    return None
+
 def error(span: AST.Span | None, message: str) -> NoReturn:
     assert span is not None
     raise ValueError(f"{message} at {span.start.line}:{span.start.col}")

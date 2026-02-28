@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from yikes.parse import ast as AST  # noqa: N812
-from yikes.parse.helpers import const_eval, error, is_complete, lookup_ident
+from yikes.parse.helpers import const_eval, error, is_complete, lookup_ident, lookup_tag
 
 
 def resolve_types(program: AST.Program) -> AST.Program:
@@ -158,8 +158,10 @@ def _resolve_ctype(ctype: AST.CType, scopes: list[AST.Scope], seen: set[str] | N
             if isinstance(resolved.return_type, (AST.ArrayType, AST.FunctionType)):
                 error(ctype.span, "Function cannot return array or function type")
             return resolved
-        case AST.StructType() | AST.UnionType() | AST.EnumType():
-            return _resolve_tag_type(ctype, scopes)
+        case AST.StructType() | AST.UnionType():
+            return _resolve_struct_type(ctype, scopes)
+        case AST.EnumType():
+            return _resolve_enum_type(ctype, scopes)
 
 def _resolve_named_type(name: AST.Identifier, scopes: list[AST.Scope], seen: set[str] | None) -> AST.CType:
     if seen is None:
@@ -172,16 +174,20 @@ def _resolve_named_type(name: AST.Identifier, scopes: list[AST.Scope], seen: set
             return _resolve_ctype(ctype, scopes, seen)
     error(name.span, f"Unknown type name '{name.name}'")
 
-def _resolve_tag_type(ctype: AST.StructType | AST.UnionType | AST.EnumType, scopes: list[AST.Scope]) -> AST.CType:
-    if ctype.name and (symbol := _lookup_tag(scopes, ctype.name.name)) and symbol.ctype:
-        match ctype:
-            case AST.EnumType(values=None) | AST.StructType(fields=None) | AST.UnionType(fields=None):
-                return symbol.ctype
-    match ctype:
-        case AST.StructType(fields=[*fields]) | AST.UnionType(fields=[*fields]):
-            return ctype._replace(fields=[_resolve_field(field, scopes) for field in fields])
-        case AST.EnumType(values=[*values]):
-            return ctype._replace(values=[_resolve_enumerator(value, scopes) for value in values])
+def _resolve_struct_type(ctype: AST.StructType | AST.UnionType, scopes: list[AST.Scope]) -> AST.CType:
+    symbol = lookup_tag(scopes, ctype.name.name) if ctype.name else None
+    if symbol and symbol.ctype and not ctype.fields:
+        return symbol.ctype
+    if ctype.fields:
+        return ctype._replace(fields=[_resolve_field(field, scopes) for field in ctype.fields])
+    return ctype
+
+def _resolve_enum_type(ctype: AST.EnumType, scopes: list[AST.Scope]) -> AST.CType:
+    symbol = lookup_tag(scopes, ctype.name.name) if ctype.name else None
+    if symbol and symbol.ctype and not ctype.values:
+        return symbol.ctype
+    if ctype.values:
+        return ctype._replace(values=[_resolve_enumerator(value, scopes) for value in ctype.values])
     return ctype
 
 def _resolve_initializer(init: AST.Initializer, scopes: list[AST.Scope]) -> AST.Initializer:
@@ -238,12 +244,6 @@ def _resolve_expr(expr: AST.Expr, scopes: list[AST.Scope]) -> AST.Expr:
             return expr._replace(ctype=ctype, value=value)
         case AST.IntLiteral() | AST.BoolLiteral() | AST.FloatLiteral() | AST.CharLiteral() | AST.StringLiteral() | AST.Identifier():
             return expr
-
-def _lookup_tag(scopes: list[AST.Scope], name: str) -> AST.Symbol | None:
-    for scope in reversed(scopes):
-        if symbol := scope.tags.get(name):
-            return symbol
-    return None
 
 def _resolve_const_int(expr: AST.Expr | None, scopes: list[AST.Scope], error_message: str) -> AST.IntLiteral | None:
     if expr is None:

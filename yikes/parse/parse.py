@@ -6,6 +6,8 @@ from yikes.lex.lex import Token, lex
 from yikes.lex.tokens import ASSIGN_OPS, BUILTIN_TYPES, FUNC_SPEC, KEYWORDS_BY_KIND, PUNCTUATORS_BY_KIND, STORAGE_CLASS, TYPE_QUAL, TokenKind
 from yikes.parse import ast as AST  # noqa: N812
 
+DECL_START_KINDS = {*STORAGE_CLASS, *TYPE_QUAL, *FUNC_SPEC, *BUILTIN_TYPES, TokenKind.KW_VOID, TokenKind.KW_STRUCT, TokenKind.KW_UNION, TokenKind.KW_ENUM}
+
 
 def parse(source: str, *, with_spans: bool = True) -> AST.Program:
     tokens = lex(source)
@@ -36,10 +38,11 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
     def peek(offset: int = 0) -> Token:
         return tokens[max(0, min(len(tokens) - 1, pos + offset))]
 
-    def at(kind: TokenKind) -> bool:
-        return peek().kind == kind
-
-    def at_any(kinds: set[TokenKind]) -> bool:
+    def at(*kinds: TokenKind) -> bool:
+        if not kinds:
+            return False
+        if len(kinds) == 1:
+            return peek().kind == kinds[0]
         return peek().kind in kinds
 
     def advance() -> Token:
@@ -48,21 +51,18 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         pos = min(pos + 1, len(tokens))
         return tok
 
-    def match(kind: TokenKind) -> bool:
-        if at(kind):
+    def match(*kinds: TokenKind) -> bool:
+        if at(*kinds):
             advance()
             return True
         return False
 
-    def match_any(kinds: set[TokenKind]) -> bool:
-        if at_any(kinds):
-            advance()
-            return True
-        return False
-
-    def expect(kind: TokenKind) -> Token:
-        if not at(kind):
-            error(f"Expected {kind.value}")
+    def expect(*kinds: TokenKind) -> Token:
+        if not at(*kinds):
+            if len(kinds) == 1:
+                error(f"Expected {kinds[0].value}")
+            expected = ", ".join(kind.value for kind in kinds)
+            error(f"Expected one of {expected}")
         return advance()
 
     def match_ident() -> AST.Identifier | None:
@@ -80,15 +80,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
         raise ValueError(f"{message} at {tok.line}:{tok.col}")
 
     def is_decl_start(tok: Token) -> bool:
-        return (
-            tok.kind in STORAGE_CLASS
-            or tok.kind in TYPE_QUAL
-            or tok.kind in FUNC_SPEC
-            or tok.kind in BUILTIN_TYPES
-            or tok.kind == TokenKind.KW_VOID
-            or tok.kind in {TokenKind.KW_STRUCT, TokenKind.KW_UNION, TokenKind.KW_ENUM}
-            or (tok.kind == TokenKind.IDENT and tok.value in typedef_names)
-        )
+        return tok.kind in DECL_START_KINDS or (tok.kind == TokenKind.IDENT and tok.value in typedef_names)
 
     def looks_like_type_name() -> bool:
         if at(TokenKind.LPAREN):
@@ -270,7 +262,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
     def parse_stmt_list(stop: set[TokenKind]) -> tuple[list[AST.Stmt], AST.Span | None]:
         start_pos = pos
         items: list[AST.Stmt] = []
-        while not at_any(stop):
+        while not at(*stop):
             if is_decl_start(peek()):
                 items.extend(parse_declaration())
             else:
@@ -350,27 +342,29 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
         while True:
             tok = peek()
-            if match_any(STORAGE_CLASS):
+            if match(*STORAGE_CLASS):
                 if not allow_storage:
                     error("Storage class not allowed here")
                 if seen_storage:
                     error("Multiple storage class specifiers")
                 seen_storage = True
                 specs.append(AST.StorageClassSpec(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
-            elif match_any(TYPE_QUAL):
+            elif match(*TYPE_QUAL):
                 specs.append(AST.TypeQualifier(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
-            elif match_any(FUNC_SPEC):
+            elif match(*FUNC_SPEC):
                 if not allow_function:
                     error("Function specifier not allowed here")
                 specs.append(AST.FunctionSpec(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
             elif match(TokenKind.KW_VOID):
                 types.append(AST.VoidType(span=span(tok)))
-            elif match_any(BUILTIN_TYPES):
+            elif match(*BUILTIN_TYPES):
                 builtins.append(AST.TypeKeyword(KEYWORDS_BY_KIND[tok.kind], span=span(tok)))
             elif at(TokenKind.KW_STRUCT):
-                types.append(parse_struct_type())
+                name, fields, type_span = parse_struct_type()
+                types.append(AST.StructType(name, fields, span=type_span))
             elif at(TokenKind.KW_UNION):
-                types.append(parse_union_type())
+                name, fields, type_span = parse_struct_type()
+                types.append(AST.UnionType(name, fields, span=type_span))
             elif at(TokenKind.KW_ENUM):
                 types.append(parse_enum_type())
             elif at(TokenKind.IDENT) and peek().value in typedef_names:
@@ -390,25 +384,15 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
 
         return AST.DeclSpecs(specs, types[0], span=span_from(start_pos))
 
-    def parse_struct_type() -> AST.StructType:
+    def parse_struct_type() -> tuple[AST.Identifier | None, list[AST.Field] | None, AST.Span | None]:
         start_pos = pos
-        expect(TokenKind.KW_STRUCT)
+        expect(TokenKind.KW_STRUCT, TokenKind.KW_UNION)
         name = match_ident()
         if match(TokenKind.LBRACE):
             fields = parse_struct_fields()
             expect(TokenKind.RBRACE)
-            return AST.StructType(name, fields, span=span_from(start_pos))
-        return AST.StructType(name, None, span=span_from(start_pos))
-
-    def parse_union_type() -> AST.UnionType:
-        start_pos = pos
-        expect(TokenKind.KW_UNION)
-        name = match_ident()
-        if match(TokenKind.LBRACE):
-            fields = parse_struct_fields()
-            expect(TokenKind.RBRACE)
-            return AST.UnionType(name, fields, span=span_from(start_pos))
-        return AST.UnionType(name, None, span=span_from(start_pos))
+            return name, fields, span_from(start_pos)
+        return name, None, span_from(start_pos)
 
     def parse_enum_type() -> AST.EnumType:
         start_pos = pos
@@ -541,7 +525,7 @@ def parse(source: str, *, with_spans: bool = True) -> AST.Program:
             start_pos = pos
             specs = parse_decl_specs(allow_storage=False, allow_function=False)
             decl = None
-            if not at_any({TokenKind.COMMA, TokenKind.RPAREN}):
+            if not at(TokenKind.COMMA, TokenKind.RPAREN):
                 decl = parse_declarator() if looks_like_named_declarator() else parse_abstract_declarator()
             if is_void_param(specs, decl, params):
                 params = []

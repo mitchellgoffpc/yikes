@@ -1,5 +1,5 @@
 def main() -> None:
-    """Main function for the yikes compiler."""
+    pass
 
 
 if __name__ == "__main__":

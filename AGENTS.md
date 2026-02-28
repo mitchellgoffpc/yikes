@@ -10,7 +10,15 @@ yikes is a simple C compiler written in Python.
 - Don't split things into multiple lines for no reason. Things that easily fit within the line limit of 160 characters should usually be on one line as long as it doesn't impact readability.
 - Avoid short docstrings. Use docstrings only when detailed documentation spanning multiple lines is required, which should be rare.
 - Always use absolute imports.
-- Functions should always be separated by a single blank line, never by two blank lines.
+- Don't use too much spacing between function definitions. They should be spaced like this:
+
+```python
+def foo():
+    return 1
+
+def bar():
+    return 2
+```
 
 ## Before Committing
 
